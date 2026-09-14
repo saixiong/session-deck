@@ -35,10 +35,59 @@
         "icon": "$(dashboard)"
       },
       {
-        "command": "sessionDeck.reindex",
-        "title": "Re-index Sessions",
+        "command": "sessionDeck.favoriteCurrentSession",
+        "title": "Favorite Current Session",
+        "category": "Session Deck",
+        "icon": "$(star-add)"
+      },
+      {
+        "command": "sessionDeck.favorite",
+        "title": "Add to Favorites",
+        "category": "Session Deck",
+        "icon": "$(star-empty)"
+      },
+      {
+        "command": "sessionDeck.unfavorite",
+        "title": "Remove from Favorites",
+        "category": "Session Deck",
+        "icon": "$(star-full)"
+      },
+      {
+        "command": "sessionDeck.toggleFavorite",
+        "title": "Toggle Favorite",
+        "category": "Session Deck"
+      },
+      {
+        "command": "sessionDeck.openSession",
+        "title": "Open Session",
+        "category": "Session Deck",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "sessionDeck.copySessionId",
+        "title": "Copy Session Id",
+        "category": "Session Deck"
+      },
+      {
+        "command": "sessionDeck.revealSessionFile",
+        "title": "Reveal Transcript in Finder / Explorer",
+        "category": "Session Deck"
+      },
+      {
+        "command": "sessionDeck.refreshTree",
+        "title": "Refresh",
         "category": "Session Deck",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "sessionDeck.showMore",
+        "title": "Show More",
+        "category": "Session Deck"
+      },
+      {
+        "command": "sessionDeck.reindex",
+        "title": "Re-index Sessions",
+        "category": "Session Deck"
       },
       {
         "command": "sessionDeck.showOutput",
@@ -75,15 +124,92 @@
     "viewsWelcome": [
       {
         "view": "sessionDeck.sessions",
-        "contents": "The session index arrives in P1. Until then the dashboard shell is here:\n[Open Dashboard](command:sessionDeck.openDashboard)"
+        "contents": "No Claude Code sessions found under ~/.claude/projects yet.\n[Open Dashboard](command:sessionDeck.openDashboard)\n[Re-index](command:sessionDeck.reindex)"
       }
     ],
     "menus": {
+      "commandPalette": [
+        {
+          "command": "sessionDeck.favorite",
+          "when": "false"
+        },
+        {
+          "command": "sessionDeck.unfavorite",
+          "when": "false"
+        },
+        {
+          "command": "sessionDeck.toggleFavorite",
+          "when": "false"
+        },
+        {
+          "command": "sessionDeck.copySessionId",
+          "when": "false"
+        },
+        {
+          "command": "sessionDeck.revealSessionFile",
+          "when": "false"
+        },
+        {
+          "command": "sessionDeck.showMore",
+          "when": "false"
+        },
+        {
+          "command": "sessionDeck.openSession",
+          "when": "false"
+        }
+      ],
       "view/title": [
         {
           "command": "sessionDeck.openDashboard",
           "when": "view == sessionDeck.sessions",
-          "group": "navigation"
+          "group": "navigation@1"
+        },
+        {
+          "command": "sessionDeck.favoriteCurrentSession",
+          "when": "view == sessionDeck.sessions",
+          "group": "navigation@2"
+        },
+        {
+          "command": "sessionDeck.refreshTree",
+          "when": "view == sessionDeck.sessions",
+          "group": "navigation@3"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "sessionDeck.favorite",
+          "when": "view == sessionDeck.sessions && viewItem =~ /^session:unstarred/",
+          "group": "inline@1"
+        },
+        {
+          "command": "sessionDeck.unfavorite",
+          "when": "view == sessionDeck.sessions && viewItem =~ /^session:starred/",
+          "group": "inline@1"
+        },
+        {
+          "command": "sessionDeck.openSession",
+          "when": "view == sessionDeck.sessions && viewItem =~ /^session:/ && viewItem =~ /^((?!missing).)*$/",
+          "group": "1_open@1"
+        },
+        {
+          "command": "sessionDeck.favorite",
+          "when": "view == sessionDeck.sessions && viewItem =~ /^session:unstarred/",
+          "group": "2_star@1"
+        },
+        {
+          "command": "sessionDeck.unfavorite",
+          "when": "view == sessionDeck.sessions && viewItem =~ /^session:starred/",
+          "group": "2_star@1"
+        },
+        {
+          "command": "sessionDeck.copySessionId",
+          "when": "view == sessionDeck.sessions && viewItem =~ /^session:/",
+          "group": "3_misc@1"
+        },
+        {
+          "command": "sessionDeck.revealSessionFile",
+          "when": "view == sessionDeck.sessions && viewItem =~ /^session:/ && viewItem =~ /^((?!missing).)*$/",
+          "group": "3_misc@2"
         }
       ]
     },
@@ -170,7 +296,8 @@
     "test:watch": "vitest",
     "test:e2e": "node esbuild.mjs && vscode-test",
     "package": "pnpm build:prod && vsce package --no-dependencies",
-    "check": "pnpm typecheck && pnpm lint && pnpm test && pnpm build"
+    "check": "pnpm typecheck && pnpm lint && pnpm test && pnpm build",
+    "fixtures": "esbuild test/fixtures/generate.ts --bundle --platform=node --format=cjs --outfile=out/generate.js --log-level=error && node out/generate.js"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.0",

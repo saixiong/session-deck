@@ -1,17 +1,32 @@
 import * as vscode from 'vscode'
+import { registerCommands } from './commands'
 import { Services } from './services'
 import { DashboardPanel } from './views/dashboard/DashboardPanel'
+import { SessionTreeProvider } from './views/tree/SessionTreeProvider'
 
 /**
- * Activation wires the shared services (output channel + background indexer),
- * the commands, the sidebar view, and the dashboard serializer. The indexer
- * starts asynchronously: activation must stay cheap because the command
- * palette activates this extension on first use.
+ * Activation wires the shared services (output channel, background indexer,
+ * favorites store), the sidebar tree, the commands, and the dashboard
+ * serializer. The indexer and the favorites file load asynchronously:
+ * activation must stay cheap because the command palette activates this
+ * extension on first use.
  */
-export function activate(context: vscode.ExtensionContext): void {
+/** What `activate` returns — consumed by the e2e suite, not a public API. */
+export interface SessionDeckApi {
+  services: Services
+  tree: SessionTreeProvider
+}
+
+export function activate(context: vscode.ExtensionContext): SessionDeckApi {
   const services = new Services(context)
+  const tree = new SessionTreeProvider(services)
   context.subscriptions.push(
     services,
+    tree,
+    vscode.window.createTreeView('sessionDeck.sessions', {
+      treeDataProvider: tree,
+      showCollapseAll: true,
+    }),
     vscode.commands.registerCommand('sessionDeck.openDashboard', () => {
       DashboardPanel.show(services)
     }),
@@ -25,21 +40,12 @@ export function activate(context: vscode.ExtensionContext): void {
       )
     }),
     vscode.commands.registerCommand('sessionDeck.showOutput', () => services.output.show()),
-    vscode.window.registerTreeDataProvider('sessionDeck.sessions', new EmptySessionsProvider()),
+    ...registerCommands(services, tree),
     DashboardPanel.register(services)
   )
+  return { services, tree }
 }
 
 export function deactivate(): void {
   // Services is disposed through context.subscriptions.
-}
-
-/** P1 placeholder. P2 replaces it with SessionTreeProvider. */
-class EmptySessionsProvider implements vscode.TreeDataProvider<never> {
-  getTreeItem(element: never): vscode.TreeItem {
-    return element
-  }
-  getChildren(): never[] {
-    return []
-  }
 }

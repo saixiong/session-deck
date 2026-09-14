@@ -75,7 +75,10 @@ export class DashboardPanel {
       this.disposables
     )
     // Index changes arrive in bursts while the full tier runs; coalesce them.
-    this.disposables.push(services.onDidChangeIndex(() => this.schedulePush()))
+    this.disposables.push(
+      services.onDidChangeIndex(() => this.schedulePush()),
+      services.onDidChangeFavorites(() => this.schedulePush())
+    )
   }
 
   private html(): string {
@@ -139,7 +142,7 @@ export class DashboardPanel {
     const { indexer, settings } = this.services
     const period = this.period
     const visible = indexer.getAll().filter((e) => isVisibleEntry(e, settings))
-    const live = await indexer.liveSessions()
+    const live = await this.services.refreshLive()
     const stats = computeStats(visible, live, period)
     const status = indexer.status()
     const indexValue = status.scanning
@@ -165,7 +168,12 @@ export class DashboardPanel {
           'Whole-session totals for sessions active in the period. ≈ while some are still indexing.',
       },
       { id: 'prs', label: 'PRs', value: String(stats.prs), hint: `linked, active in ${period}` },
-      { id: 'favorites', label: 'Favorites', value: '0', hint: 'arrives in P2' },
+      {
+        id: 'favorites',
+        label: 'Favorites',
+        value: String(this.services.favorites.list().length),
+        hint: 'starred sessions',
+      },
       {
         id: 'index',
         label: 'Index',
