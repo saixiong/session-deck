@@ -393,7 +393,8 @@
     "test:e2e": "node esbuild.mjs && vscode-test",
     "package": "pnpm build:prod && vsce package --no-dependencies",
     "check": "pnpm typecheck && pnpm lint && pnpm test && pnpm build",
-    "fixtures": "esbuild test/fixtures/generate.ts --bundle --platform=node --format=cjs --outfile=out/generate.js --log-level=error && node out/generate.js"
+    "fixtures": "esbuild test/fixtures/generate.ts --bundle --platform=node --format=cjs --outfile=out/generate.js --log-level=error && node out/generate.js",
+    "skill:install": "mkdir -p ~/.claude/skills && ln -sfn \"$(pwd)/skills/session-deck\" ~/.claude/skills/session-deck && echo \"linked ~/.claude/skills/session-deck\""
   },
   "devDependencies": {
     "@eslint/js": "^9.39.0",

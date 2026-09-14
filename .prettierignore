@@ -3,3 +3,4 @@ dist/
 pnpm-lock.yaml
 CHANGELOG.md
 *.md
+skills/session-deck/cli.js

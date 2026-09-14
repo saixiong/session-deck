@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- P6: the `/session-deck` Claude Code skill — `skills/session-deck/` (SKILL.md + a CLI bundled
+  from the extension's own modules): list, review [--run], show, star/unstar over the same
+  `~/.session-deck` files; `pnpm skill:install` symlinks it into `~/.claude/skills`.
 - P5: marketplace metadata, icon, walkthrough, README with screenshots; `.vsix` verified to
   install and activate with zero configuration on a fresh profile.
 - P4: Review — headless `claude -p --json-schema` analyser (isolated: no hooks, MCP, CLAUDE.md or

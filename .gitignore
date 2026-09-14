@@ -6,3 +6,4 @@ dist/
 node_modules/
 out/
 test/fixtures/workspace/.vscode/
+skills/session-deck/cli.js

@@ -36,6 +36,16 @@ const e2e = await esbuild.context({
   external: ['vscode', 'mocha'],
 })
 
+// The /session-deck skill's engine: the extension's own modules, no vscode.
+const skill = await esbuild.context({
+  ...common,
+  entryPoints: ['src/cli/main.ts'],
+  outfile: 'skills/session-deck/cli.js',
+  format: 'cjs',
+  platform: 'node',
+  banner: { js: '#!/usr/bin/env node' },
+})
+
 const webview = await esbuild.context({
   ...common,
   entryPoints: ['webview/index.tsx'],
@@ -50,8 +60,8 @@ const webview = await esbuild.context({
 })
 
 if (watch) {
-  await Promise.all([host.watch(), e2e.watch(), webview.watch()])
+  await Promise.all([host.watch(), e2e.watch(), skill.watch(), webview.watch()])
 } else {
-  await Promise.all([host.rebuild(), e2e.rebuild(), webview.rebuild()])
-  await Promise.all([host.dispose(), e2e.dispose(), webview.dispose()])
+  await Promise.all([host.rebuild(), e2e.rebuild(), skill.rebuild(), webview.rebuild()])
+  await Promise.all([host.dispose(), e2e.dispose(), skill.dispose(), webview.dispose()])
 }
