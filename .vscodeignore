@@ -1,0 +1,8 @@
+**
+!dist/**
+!media/**
+!README.md
+!CHANGELOG.md
+!LICENSE
+!package.json
+!dist/test/**

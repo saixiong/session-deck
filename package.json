@@ -1,0 +1,183 @@
+{
+  "name": "session-deck",
+  "displayName": "Session Deck",
+  "description": "A favorites dashboard for Claude Code sessions in VS Code: star them, review where each one stands, and jump back in.",
+  "version": "0.0.1",
+  "publisher": "saixiong",
+  "license": "MIT",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/saixiong/session-deck"
+  },
+  "engines": {
+    "vscode": "^1.130.0",
+    "node": ">=20"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "claude",
+    "claude code",
+    "sessions",
+    "favorites",
+    "dashboard"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "commands": [
+      {
+        "command": "sessionDeck.openDashboard",
+        "title": "Open Dashboard",
+        "category": "Session Deck",
+        "icon": "$(dashboard)"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "sessionDeck.openDashboard",
+        "key": "ctrl+shift+alt+d",
+        "mac": "cmd+shift+alt+d"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "sessionDeck",
+          "title": "Session Deck",
+          "icon": "media/deck.svg"
+        }
+      ]
+    },
+    "views": {
+      "sessionDeck": [
+        {
+          "id": "sessionDeck.sessions",
+          "name": "Sessions",
+          "icon": "media/deck.svg",
+          "contextualTitle": "Session Deck"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "sessionDeck.sessions",
+        "contents": "The session index arrives in P1. Until then the dashboard shell is here:\n[Open Dashboard](command:sessionDeck.openDashboard)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "sessionDeck.openDashboard",
+          "when": "view == sessionDeck.sessions",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Session Deck",
+      "properties": {
+        "sessionDeck.dataDir": {
+          "type": "string",
+          "default": "~/.session-deck",
+          "description": "Where favorites and cached reviews are stored. Never inside ~/.claude."
+        },
+        "sessionDeck.claudeProjectsDir": {
+          "type": "string",
+          "default": "~/.claude/projects",
+          "description": "Read-only source of Claude Code session transcripts. Override if you use CLAUDE_CONFIG_DIR."
+        },
+        "sessionDeck.claudePath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the `claude` CLI used for reviews. Empty = auto-detect (PATH, then ~/.local/bin/claude)."
+        },
+        "sessionDeck.model": {
+          "type": "string",
+          "enum": [
+            "haiku",
+            "sonnet",
+            "opus"
+          ],
+          "default": "sonnet",
+          "description": "Model alias passed to `claude -p --model` when reviewing a session."
+        },
+        "sessionDeck.concurrency": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8,
+          "default": 4,
+          "description": "How many sessions are reviewed in parallel."
+        },
+        "sessionDeck.transcriptTurns": {
+          "type": "integer",
+          "minimum": 10,
+          "maximum": 400,
+          "default": 80,
+          "description": "How many of the most recent turns a review reads."
+        },
+        "sessionDeck.showSdkSessions": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show sessions produced by SDK/headless producers (entrypoint `sdk-cli`). Off by default: they are usually automation logs, not conversations."
+        },
+        "sessionDeck.openTarget": {
+          "type": "string",
+          "enum": [
+            "panel",
+            "window",
+            "terminal"
+          ],
+          "default": "panel",
+          "description": "Where a session opens: the Claude Code panel, a new VS Code window, or a terminal running `claude --resume`."
+        },
+        "sessionDeck.openInFocusView": {
+          "type": "boolean",
+          "default": false,
+          "description": "Toggle Claude Code's Focus view after opening a session."
+        },
+        "sessionDeck.indexLargeFilesMB": {
+          "type": "integer",
+          "minimum": 16,
+          "default": 512,
+          "description": "Transcripts larger than this are indexed from their head and tail only; token totals for them show as approximate."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "build:prod": "node esbuild.mjs --production",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.webview.json --noEmit && tsc -p tsconfig.e2e.json --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "node esbuild.mjs && vscode-test",
+    "package": "pnpm build:prod && vsce package --no-dependencies",
+    "check": "pnpm typecheck && pnpm lint && pnpm test && pnpm build"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.0",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^22.19.0",
+    "@types/vscode": "^1.130.0",
+    "@vscode/codicons": "0.0.46-24",
+    "@vscode/test-cli": "^0.0.15",
+    "@vscode/test-electron": "^3.1.0",
+    "@vscode/vsce": "^3.9.2",
+    "esbuild": "^0.28.2",
+    "eslint": "^9.39.0",
+    "mocha": "^11.7.0",
+    "preact": "^10.29.0",
+    "prettier": "^3.9.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.70.0",
+    "vitest": "^4.1.0"
+  },
+  "packageManager": "pnpm@10.33.4"
+}
