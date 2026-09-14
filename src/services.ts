@@ -1,5 +1,10 @@
+import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import * as vscode from 'vscode'
+import { runClaude } from './analyze/ClaudeCli'
+import { ReviewRunner } from './analyze/ReviewRunner'
+import { ReviewStore } from './analyze/ReviewStore'
+import { buildTranscript } from './analyze/transcript'
 import {
   createIndexer,
   INDEXER_SETTING_KEYS,
@@ -13,7 +18,10 @@ import { SessionOpener } from './open/SessionOpener'
 import { SessionResolver } from './registry/sessionResolver'
 import { ResolverRegistry } from './registry/types'
 import { FavoritesStore } from './store/FavoritesStore'
+import { resolveClaudeCli } from './util/claudeCli'
 import { expandHome } from './util/paths'
+
+const REVIEW_TIMEOUT_MS = 180_000
 
 const LIVE_TTL_MS = 5_000
 
@@ -28,6 +36,8 @@ export class Services implements vscode.Disposable {
   readonly registry = new ResolverRegistry()
   readonly sessions: SessionResolver
   readonly opener: SessionOpener
+  readonly reviews: ReviewStore
+  readonly runner: ReviewRunner
   private indexerInstance: SessionIndexer
   private settingsSnapshot: IndexerSettings
   private readonly indexEmitter = new vscode.EventEmitter<string[]>()
@@ -52,10 +62,58 @@ export class Services implements vscode.Disposable {
     )
     this.favorites = new FavoritesStore(join(dataDir, 'favorites.json'))
     this.favorites.onDidChange(() => this.favoritesEmitter.fire())
-    this.favoritesReady = this.favorites.load().then(
-      () => this.favorites.watch(),
-      (err: unknown) => this.output.appendLine(`[favorites] load failed: ${String(err)}`)
-    )
+    this.reviews = new ReviewStore(join(dataDir, 'reviews'))
+    this.favoritesReady = Promise.all([
+      this.favorites.load().then(
+        () => this.favorites.watch(),
+        (err: unknown) => this.output.appendLine(`[favorites] load failed: ${String(err)}`)
+      ),
+      this.reviews
+        .load()
+        .catch((err: unknown) => this.output.appendLine(`[reviews] load failed: ${String(err)}`)),
+    ]).then(() => undefined)
+
+    // The runner reads settings per call so a model change applies to the next batch.
+    const config = () => vscode.workspace.getConfiguration('sessionDeck')
+    this.runner = new ReviewRunner({
+      getEntry: (id) => this.indexerInstance.get(id),
+      buildTranscript: (entry) =>
+        buildTranscript(entry, { turns: config().get<number>('transcriptTurns', 80) }),
+      callModel: async ({ prompt, systemPrompt, schema, signal }) => {
+        const cli = await resolveClaudeCli()
+        if (!cli) {
+          return {
+            ok: false,
+            structured: undefined,
+            resultText: undefined,
+            costUsd: null,
+            durationMs: null,
+            errorText: 'no claude CLI found — set sessionDeck.claudePath',
+          }
+        }
+        // A neutral cwd: no CLAUDE.md, no project settings, nothing of the user's.
+        const cwd = join(context.globalStorageUri.fsPath, 'review-cwd')
+        await mkdir(cwd, { recursive: true })
+        return runClaude({
+          cliPath: cli.path,
+          prompt,
+          systemPrompt,
+          schema,
+          model: config().get<string>('model', 'sonnet'),
+          cwd,
+          timeoutMs: REVIEW_TIMEOUT_MS,
+          signal,
+        })
+      },
+      store: this.reviews,
+      get model() {
+        return config().get<string>('model', 'sonnet')
+      },
+      get concurrency() {
+        return Math.max(1, Math.min(8, config().get<number>('concurrency', 4)))
+      },
+      log: (m) => this.output.appendLine(`[review] ${m}`),
+    })
 
     this.sessions = new SessionResolver({
       entries: () => this.indexerInstance.getAll(),

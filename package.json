@@ -41,6 +41,17 @@
         "icon": "$(star-add)"
       },
       {
+        "command": "sessionDeck.reviewFavorites",
+        "title": "Review Favorite Sessions",
+        "category": "Session Deck",
+        "icon": "$(checklist)"
+      },
+      {
+        "command": "sessionDeck.reviewSession",
+        "title": "Review Session",
+        "category": "Session Deck"
+      },
+      {
         "command": "sessionDeck.favorite",
         "title": "Add to Favorites",
         "category": "Session Deck",
@@ -174,6 +185,10 @@
         {
           "command": "sessionDeck.openSessionInWindow",
           "when": "false"
+        },
+        {
+          "command": "sessionDeck.reviewSession",
+          "when": "false"
         }
       ],
       "view/title": [
@@ -218,6 +233,11 @@
           "command": "sessionDeck.openSessionInWindow",
           "when": "view == sessionDeck.sessions && viewItem =~ /^session:/ && viewItem =~ /^((?!missing).)*$/",
           "group": "1_open@3"
+        },
+        {
+          "command": "sessionDeck.reviewSession",
+          "when": "view == sessionDeck.sessions && viewItem =~ /^session:/ && viewItem =~ /^((?!missing).)*$/",
+          "group": "1_open@4"
         },
         {
           "command": "sessionDeck.favorite",

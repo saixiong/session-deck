@@ -5,6 +5,7 @@ import { PERIODS } from '../src/shared/messages'
 import { onHostMessage, post } from './vscodeApi'
 import { FavoritesSection } from './components/FavoritesSection'
 import { PickerModal } from './components/PickerModal'
+import { ReviewModal } from './components/ReviewModal'
 import { Shelf } from './components/Shelf'
 import { StatStrip } from './components/StatStrip'
 
@@ -27,6 +28,7 @@ export function App() {
   )
   const [candidates, setCandidates] = useState<CandidatesPayload | null>(null)
   const [toasts, setToasts] = useState<Toast[]>([])
+  const [reviewOpen, setReviewOpen] = useState<{ focus: string | null } | null>(null)
 
   useEffect(() => {
     const off = onHostMessage((message) => {
@@ -36,6 +38,9 @@ export function App() {
           return
         case 'candidates':
           setCandidates(message.payload)
+          return
+        case 'showReview':
+          setReviewOpen({ focus: message.focus })
           return
         case 'toast': {
           const id = Date.now() + Math.random()
@@ -137,8 +142,10 @@ export function App() {
           prefs={prefs}
           workspaceKeys={state.workspaceKeys}
           onAdd={() => setPicker({ entityType: group.entityType, label: group.label })}
-          onReview={group.entityType === 'session' ? () => undefined : undefined}
-          reviewEnabled={false}
+          onReview={
+            group.entityType === 'session' ? () => setReviewOpen({ focus: null }) : undefined
+          }
+          reviewEnabled={group.items.length > 0 || state.review.extraIds.length > 0}
         />
       ))}
 
@@ -168,6 +175,15 @@ export function App() {
           candidates={candidates && candidates.entityType === picker.entityType ? candidates : null}
           favoritedIds={favoritedByType.get(picker.entityType) ?? new Set()}
           onClose={closePicker}
+        />
+      ) : null}
+
+      {reviewOpen ? (
+        <ReviewModal
+          group={state.groups.find((g) => g.entityType === 'session')}
+          review={state.review}
+          focus={reviewOpen.focus}
+          onClose={() => setReviewOpen(null)}
         />
       ) : null}
 

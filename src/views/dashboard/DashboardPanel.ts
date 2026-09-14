@@ -1,8 +1,10 @@
 import * as vscode from 'vscode'
 import { isVisibleEntry } from '../../index/createIndexer'
 import { computeStats, formatCount, isPeriod } from '../../index/stats'
+import { MAX_REVIEW_IDS } from '../../analyze/ReviewRunner'
 import { buildFavoriteGroups } from '../../registry/favoritesView'
 import type { Services } from '../../services'
+import { resolveClaudeCli, type ClaudeCliLocation } from '../../util/claudeCli'
 import type { FavoriteCard } from '../../shared/cards'
 import type {
   DashboardPrefs,
@@ -19,6 +21,7 @@ const PERIOD_KEY = 'sessionDeck.dashboard.period'
 const PREFS_KEY = 'sessionDeck.dashboard.prefs'
 const SUGGESTED_LIMIT = 12
 const BROWSE_MAX = 200
+const CLI_PROBE_TTL_MS = 30_000
 
 /**
  * Hosts the dashboard webview. One panel per window: opening it again
@@ -32,6 +35,15 @@ export class DashboardPanel {
 
   private readonly disposables: vscode.Disposable[] = []
   private pushTimer: NodeJS.Timeout | undefined
+  /** Sessions reviewed from outside the favorites list (tree → Review); shown in the modal too. */
+  private readonly extraReviewIds = new Set<string>()
+  /** A showReview that arrived before the webview said `ready`; delivered on ready. */
+  private pendingShowReview: { focus: string | null } | null = null
+  private webviewReady = false
+  private cliProbe: { at: number; value: ClaudeCliLocation | undefined } = {
+    at: 0,
+    value: undefined,
+  }
 
   static show(services: Services): DashboardPanel {
     const column = vscode.window.activeTextEditor?.viewColumn ?? vscode.ViewColumn.One
@@ -90,8 +102,54 @@ export class DashboardPanel {
     this.disposables.push(
       services.onDidChangeIndex(() => this.schedulePush()),
       services.onDidChangeFavorites(() => this.schedulePush()),
-      vscode.workspace.onDidChangeWorkspaceFolders(() => this.schedulePush())
+      vscode.workspace.onDidChangeWorkspaceFolders(() => this.schedulePush()),
+      { dispose: services.runner.onProgress(() => this.schedulePush()) }
     )
+  }
+
+  /** Open the Review modal (optionally focused on one session) and start analysing it. */
+  async showReview(focus: string | null, analyze = false): Promise<void> {
+    if (focus && !this.services.favorites.has('session', focus)) this.extraReviewIds.add(focus)
+    if (this.webviewReady) {
+      await this.push()
+      await this.send({ type: 'showReview', focus })
+    } else {
+      this.pendingShowReview = { focus }
+    }
+    if (analyze && focus) {
+      if (this.services.runner.running) {
+        void vscode.window.showInformationMessage(
+          'Session Deck: a review batch is already running — this session will show as unreviewed until you run it.'
+        )
+      } else {
+        void this.runBatch([focus], false)
+      }
+    }
+  }
+
+  private async runBatch(ids: string[] | null, force: boolean): Promise<void> {
+    const { services } = this
+    const targets = ids ?? [
+      ...services.favorites.listByType('session').map((f) => f.entity_id),
+      ...this.extraReviewIds,
+    ]
+    if (targets.length > MAX_REVIEW_IDS) {
+      await this.send({
+        type: 'toast',
+        level: 'warn',
+        text: `Only the first ${MAX_REVIEW_IDS} of ${targets.length} sessions are analysed per batch.`,
+      })
+    }
+    try {
+      await services.runner.analyze(targets, { force })
+    } catch (err) {
+      await this.send({
+        type: 'toast',
+        level: 'error',
+        text: String(err instanceof Error ? err.message : err),
+      })
+    }
+    await this.push()
   }
 
   private html(): string {
@@ -123,7 +181,13 @@ export class DashboardPanel {
     switch (msg.type) {
       case 'ready':
         await services.favoritesReady
+        this.webviewReady = true
         await this.push()
+        if (this.pendingShowReview) {
+          const pending = this.pendingShowReview
+          this.pendingShowReview = null
+          await this.send({ type: 'showReview', focus: pending.focus })
+        }
         return
       case 'openExternal': {
         // The webview is trusted code, but a link it renders may not be:
@@ -178,6 +242,20 @@ export class DashboardPanel {
         })
         return
       }
+      case 'reviewAnalyze':
+        void this.runBatch(msg.ids, msg.force)
+        return
+      case 'reviewCancel':
+        services.runner.cancel()
+        return
+      case 'reviewDelete':
+        await services.reviews.delete(msg.sessionId)
+        await this.push()
+        return
+      case 'reviewDismissExtra':
+        this.extraReviewIds.delete(msg.sessionId)
+        await this.push()
+        return
       case 'browse': {
         const resolver = services.registry.get(msg.entityType)
         if (!resolver) return
@@ -318,6 +396,32 @@ export class DashboardPanel {
       suggested,
       workspaceKeys: (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath),
       browsable: registry.all().map((r) => r.entityType),
+      review: await this.reviewState(favoritedIds),
+    }
+  }
+
+  private async reviewState(favoritedIds: Set<string>): Promise<DashboardState['review']> {
+    const { reviews, runner, indexer } = this.services
+    const wanted = new Set([...favoritedIds, ...this.extraReviewIds])
+    const out: DashboardState['review']['reviews'] = {}
+    for (const review of reviews.all()) {
+      if (!wanted.has(review.conversation_id)) continue
+      out[review.conversation_id] = {
+        ...review,
+        stale: runner.isStale(review, indexer.get(review.conversation_id)),
+      }
+    }
+    if (Date.now() - this.cliProbe.at > CLI_PROBE_TTL_MS) {
+      this.cliProbe = { at: Date.now(), value: await resolveClaudeCli() }
+    }
+    const cli = this.cliProbe.value
+    return {
+      reviews: out,
+      batch: runner.current(),
+      extraIds: [...this.extraReviewIds],
+      extraCards: Object.fromEntries(this.services.sessions.hydrate([...this.extraReviewIds])),
+      model: vscode.workspace.getConfiguration('sessionDeck').get<string>('model', 'sonnet'),
+      cli: { found: cli !== undefined, path: cli?.path ?? null, source: cli?.source ?? null },
     }
   }
 

@@ -8,6 +8,7 @@
  * a stale webview talking to a newer host must be ignored, never crash it.
  */
 import type { FavoriteCard, FavoriteEntityType, FavoriteGroup } from './cards'
+import type { BatchProgress, ChatReview } from './review'
 
 export type Period = '24h' | '7d' | '30d'
 export const PERIODS: readonly Period[] = ['24h', '7d', '30d']
@@ -49,6 +50,17 @@ export const DEFAULT_PREFS: DashboardPrefs = {
   collapsed: {},
 }
 
+export interface ReviewState {
+  /** Cached reports by session id, each flagged stale when the transcript moved on. */
+  reviews: Record<string, ChatReview & { stale: boolean }>
+  batch: BatchProgress | null
+  /** Sessions the modal lists beyond favorites (e.g. reviewed from the tree — Q2), with their cards. */
+  extraIds: string[]
+  extraCards: Record<string, FavoriteCard>
+  model: string
+  cli: { found: boolean; path: string | null; source: string | null }
+}
+
 export interface DashboardState {
   extensionVersion: string
   period: Period
@@ -62,6 +74,7 @@ export interface DashboardState {
   workspaceKeys: string[]
   /** Which entity types can be browsed by the picker. */
   browsable: FavoriteEntityType[]
+  review: ReviewState
 }
 
 export interface CandidatesPayload {
@@ -76,6 +89,7 @@ export type HostToWebview =
   | { type: 'state'; state: DashboardState }
   | { type: 'candidates'; payload: CandidatesPayload }
   | { type: 'toast'; level: 'info' | 'warn' | 'error'; text: string }
+  | { type: 'showReview'; focus: string | null }
 
 export type OpenTargetChoice = 'default' | 'window' | 'terminal'
 
@@ -96,8 +110,12 @@ export type WebviewToHost =
       target?: OpenTargetChoice
     }
   | { type: 'browse'; entityType: FavoriteEntityType; query: string; limit: number }
+  | { type: 'reviewAnalyze'; ids: string[] | null; force: boolean }
+  | { type: 'reviewCancel' }
+  | { type: 'reviewDelete'; sessionId: string }
+  | { type: 'reviewDismissExtra'; sessionId: string }
 
-const HOST_TYPES: ReadonlySet<string> = new Set(['state', 'candidates', 'toast'])
+const HOST_TYPES: ReadonlySet<string> = new Set(['state', 'candidates', 'toast', 'showReview'])
 const WEBVIEW_TYPES: ReadonlySet<string> = new Set([
   'ready',
   'openExternal',
@@ -109,6 +127,10 @@ const WEBVIEW_TYPES: ReadonlySet<string> = new Set([
   'moveFavorite',
   'open',
   'browse',
+  'reviewAnalyze',
+  'reviewCancel',
+  'reviewDelete',
+  'reviewDismissExtra',
 ])
 const COMMANDS: ReadonlySet<string> = new Set(['reload', 'reindex'])
 const ENTITY_TYPES: ReadonlySet<string> = new Set(['session', 'project', 'pr'])
@@ -168,6 +190,16 @@ export function isWebviewToHost(value: unknown): value is WebviewToHost {
         str(v['query']) &&
         typeof v['limit'] === 'number'
       )
+    case 'reviewAnalyze':
+      return (
+        (v['ids'] === null || (Array.isArray(v['ids']) && v['ids'].every(str))) &&
+        typeof v['force'] === 'boolean'
+      )
+    case 'reviewCancel':
+      return true
+    case 'reviewDelete':
+    case 'reviewDismissExtra':
+      return str(v['sessionId'])
     default:
       return false
   }

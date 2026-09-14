@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- P4: Review — headless `claude -p --json-schema` analyser (isolated: no hooks, MCP, CLAUDE.md or
+  session persistence), tail-first transcript builder with compaction digest, cached reports in
+  `~/.session-deck/reviews/`, batch runner with concurrency/cancel/per-session failure, and the
+  full-height Review modal: pinned progress bar with inline errors, priority-ordered cards,
+  unreviewed stubs, radio directions that seed (never send) a prompt; `Review Session` on any
+  session from the tree.
 - P3: the dashboard — favorites grouped by project (workspace first), grid/list, verbose switch,
   tip decks with a pinned how-to, per-section picker (no Save), Live and Suggested shelves,
   drag-to-reorder, missing cards; SessionOpener with panel / new-window / terminal paths and

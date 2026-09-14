@@ -25,7 +25,9 @@ async function waitFor<T>(
 
 const EXT_ID = 'saixiong.session-deck'
 const FIXTURE_PROJECTS = resolve(__dirname, '../../../test/fixtures/claude/projects')
+const FAKE_CLAUDE = resolve(__dirname, '../../../test/fixtures/fake-claude.sh')
 const A = '11111111-1111-4111-8111-111111111111'
+const B = '22222222-2222-4222-8222-222222222222'
 
 let api: SessionDeckApi
 let dataDir: string
@@ -36,12 +38,16 @@ suite('Session Deck — smoke', () => {
     const config = vscode.workspace.getConfiguration('sessionDeck')
     await config.update('claudeProjectsDir', FIXTURE_PROJECTS, vscode.ConfigurationTarget.Workspace)
     await config.update('dataDir', dataDir, vscode.ConfigurationTarget.Workspace)
+    await config.update('claudePath', FAKE_CLAUDE, vscode.ConfigurationTarget.Workspace)
+    await config.update('model', 'haiku', vscode.ConfigurationTarget.Workspace)
   })
 
   suiteTeardown(async () => {
     const config = vscode.workspace.getConfiguration('sessionDeck')
     await config.update('claudeProjectsDir', undefined, vscode.ConfigurationTarget.Workspace)
     await config.update('dataDir', undefined, vscode.ConfigurationTarget.Workspace)
+    await config.update('claudePath', undefined, vscode.ConfigurationTarget.Workspace)
+    await config.update('model', undefined, vscode.ConfigurationTarget.Workspace)
     await rm(dataDir, { recursive: true, force: true })
   })
 
@@ -130,6 +136,52 @@ suite('Session Deck — smoke', () => {
     // No pid files in the fixture sessions dir → the command must not throw.
     await vscode.commands.executeCommand('sessionDeck.favoriteCurrentSession')
     assert.equal(api.services.favorites.list().length, 0)
+  })
+
+  test('a review batch runs through the (fake) CLI, caches to disk, and reports a failure inline', async () => {
+    await vscode.commands.executeCommand('sessionDeck.favorite', A)
+    await vscode.commands.executeCommand('sessionDeck.favorite', B)
+    const { runner, reviews } = api.services
+    const events: string[] = []
+    runner.onProgress((p) => events.push(JSON.stringify(p.status)))
+    const progress = await runner.analyze([A, B])
+    assert.equal(progress.done, 2)
+    assert.equal(progress.failed, 0)
+    assert.ok(progress.cost_usd > 0.006, `cost ${progress.cost_usd}`)
+    assert.ok(
+      events.some((e) => e.includes('"running"')),
+      'saw a running state'
+    )
+    const a = reviews.get(A)
+    assert.equal(a?.priority, 4)
+    assert.equal(a?.options.length, 2)
+    assert.equal(a?.model, 'haiku')
+    const onDisk = JSON.parse(await readFile(join(dataDir, 'reviews', `${A}.json`), 'utf8')) as {
+      fingerprint: string
+    }
+    assert.ok(onDisk.fingerprint.includes(':'))
+    // Fresh reviews are skipped next time; forcing re-runs them.
+    assert.equal((await runner.analyze([A, B])).ids.length, 0)
+    assert.equal((await runner.analyze([A], { force: true })).done, 1)
+
+    // A failing CLI reports inline and leaves the cache untouched.
+    process.env['FAKE_CLAUDE_FAIL'] = '1'
+    try {
+      const failed = await runner.analyze([B], { force: true })
+      assert.equal(failed.failed, 1)
+      assert.match(failed.errors[B] ?? '', /Not logged in/)
+      assert.ok(reviews.get(B), 'previous good review kept')
+    } finally {
+      delete process.env['FAKE_CLAUDE_FAIL']
+    }
+    await vscode.commands.executeCommand('sessionDeck.unfavorite', A)
+    await vscode.commands.executeCommand('sessionDeck.unfavorite', B)
+  })
+
+  test('reviewSession from the tree opens the dashboard and tracks a non-favorite', async () => {
+    await vscode.commands.executeCommand('sessionDeck.reviewSession', B)
+    await waitFor(() => (api.services.runner.running ? undefined : true))
+    assert.ok(api.services.reviews.get(B))
   })
 
   test('openDashboard opens a single Session Deck tab, and re-running reveals it', async () => {

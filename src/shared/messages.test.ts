@@ -17,6 +17,11 @@ describe('postMessage guards', () => {
       { type: 'open', entityType: 'session', entityId: 'a' },
       { type: 'open', entityType: 'session', entityId: 'a', prompt: 'go', target: 'window' },
       { type: 'browse', entityType: 'session', query: '', limit: 50 },
+      { type: 'reviewAnalyze', ids: null, force: false },
+      { type: 'reviewAnalyze', ids: ['a', 'b'], force: true },
+      { type: 'reviewCancel' },
+      { type: 'reviewDelete', sessionId: 'a' },
+      { type: 'reviewDismissExtra', sessionId: 'a' },
     ]
     for (const m of ok) expect(isWebviewToHost(m), JSON.stringify(m)).toBe(true)
   })
@@ -38,6 +43,9 @@ describe('postMessage guards', () => {
       { type: 'moveFavorite', id: 'fav_1' },
       { type: 'open', entityType: 'session', entityId: 'a', target: 'moon' },
       { type: 'browse', entityType: 'session', query: '' },
+      { type: 'reviewAnalyze', ids: 'a', force: true },
+      { type: 'reviewAnalyze', ids: null },
+      { type: 'reviewDelete' },
     ]
     for (const m of bad) {
       expect(isWebviewToHost(m), JSON.stringify(m)).toBe(false)
@@ -49,5 +57,6 @@ describe('postMessage guards', () => {
     expect(isHostToWebview({ type: 'state', state: {} })).toBe(true)
     expect(isHostToWebview({ type: 'candidates', payload: {} })).toBe(true)
     expect(isHostToWebview({ type: 'toast', level: 'info', text: 'hi' })).toBe(true)
+    expect(isHostToWebview({ type: 'showReview', focus: null })).toBe(true)
   })
 })

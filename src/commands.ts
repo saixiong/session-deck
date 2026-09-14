@@ -2,6 +2,7 @@ import * as vscode from 'vscode'
 import { resolveTitle } from './index/records'
 import { isSessionId } from './open/SessionOpener'
 import type { Services } from './services'
+import { DashboardPanel } from './views/dashboard/DashboardPanel'
 import type { SessionTreeProvider, TreeNode } from './views/tree/SessionTreeProvider'
 
 /**
@@ -73,6 +74,17 @@ export function registerCommands(
       if (!sessionId) return
       const entry = indexer.get(sessionId)
       await opener.open({ sessionId, target: 'window', ...(entry?.cwd ? { cwd: entry.cwd } : {}) })
+    }),
+
+    vscode.commands.registerCommand('sessionDeck.reviewSession', async (arg: unknown) => {
+      // Any session, starred or not (Q2): the report is cached the same way.
+      const sessionId = sessionIdOf(arg)
+      if (!sessionId) return
+      await DashboardPanel.show(services).showReview(sessionId, true)
+    }),
+
+    vscode.commands.registerCommand('sessionDeck.reviewFavorites', async () => {
+      await DashboardPanel.show(services).showReview(null)
     }),
 
     vscode.commands.registerCommand('sessionDeck.favorite', async (arg: unknown) => {

@@ -838,3 +838,340 @@ body.vscode-high-contrast-light .modal {
 .toast--warn {
   border-color: var(--vscode-editorWarning-foreground, var(--deck-border));
 }
+
+/* Review modal ----------------------------------------------------------------- */
+
+.review__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--deck-border);
+}
+
+.review__status {
+  flex: 1 1 auto;
+}
+
+.review__actions {
+  display: flex;
+  gap: 6px;
+}
+
+.review__note {
+  flex: 1 1 100%;
+  font-size: 0.85em;
+  margin: 0;
+}
+
+/* The cards own the scroll region; the header above stays put (Snippbot #852). */
+.review__list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 10px;
+}
+
+.progress {
+  flex: 1 1 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.progress__bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--vscode-progressBar-background, var(--deck-border));
+  overflow: hidden;
+  opacity: 0.35;
+}
+
+.progress__fill {
+  height: 100%;
+  background: var(--vscode-progressBar-background, var(--vscode-focusBorder));
+  opacity: 1;
+  transition: width 200ms ease;
+}
+
+.progress__bar:has(.progress__fill) {
+  opacity: 1;
+  background: var(--deck-border);
+}
+
+.progress__fill--warn {
+  background: var(
+    --vscode-editorWarning-foreground,
+    var(--vscode-charts-orange, var(--vscode-focusBorder))
+  );
+}
+
+.progress__label {
+  font-size: 0.85em;
+  color: var(--vscode-descriptionForeground);
+}
+
+.progress__items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 0.85em;
+}
+
+.progress__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.progress__item--done {
+  color: var(--vscode-charts-green, var(--vscode-foreground));
+}
+
+.progress__item--running {
+  color: var(--vscode-foreground);
+}
+
+.progress__item--failed {
+  color: var(--vscode-editorError-foreground, var(--vscode-foreground));
+}
+
+.progress__item-error {
+  margin-left: 4px;
+  font-style: italic;
+}
+
+.rcard {
+  border: 1px solid var(--deck-border);
+  border-left-width: 4px;
+  border-radius: var(--deck-radius);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--vscode-editor-background);
+}
+
+.rcard--p5 {
+  border-left-color: var(--vscode-charts-red, var(--deck-border));
+}
+
+.rcard--p4 {
+  border-left-color: var(--vscode-charts-orange, var(--deck-border));
+}
+
+.rcard--p3 {
+  border-left-color: var(--vscode-charts-yellow, var(--deck-border));
+}
+
+.rcard--p2 {
+  border-left-color: var(--vscode-charts-blue, var(--deck-border));
+}
+
+.rcard--p1 {
+  border-left-color: var(--vscode-descriptionForeground);
+}
+
+.rcard--unreviewed {
+  border-left-color: var(--deck-border);
+  border-style: dashed;
+  background: var(--deck-surface-quiet);
+}
+
+.rcard--missing {
+  opacity: 0.65;
+}
+
+.rcard--busy {
+  opacity: 0.8;
+}
+
+.rcard__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+
+.rcard__title-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.rcard__title {
+  font-size: 1.05em;
+  font-weight: 600;
+  margin: 0;
+}
+
+.rcard__meta {
+  font-size: 0.85em;
+}
+
+.prio {
+  font-size: 0.75em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 7px;
+  border-radius: 9px;
+  border: 1px solid var(--deck-border);
+}
+
+.prio--5 {
+  color: var(--vscode-charts-red, var(--vscode-foreground));
+  border-color: currentColor;
+}
+
+.prio--4 {
+  color: var(--vscode-charts-orange, var(--vscode-foreground));
+  border-color: currentColor;
+}
+
+.prio--3 {
+  color: var(--vscode-charts-yellow, var(--vscode-foreground));
+  border-color: currentColor;
+}
+
+.prio--2 {
+  color: var(--vscode-charts-blue, var(--vscode-foreground));
+  border-color: currentColor;
+}
+
+.tag--warn {
+  color: var(--vscode-editorWarning-foreground, var(--vscode-foreground));
+  border-color: currentColor;
+}
+
+.rcard__summary {
+  margin: 0;
+}
+
+.rcard__why {
+  margin: 0;
+  font-size: 0.9em;
+}
+
+.rcard__error {
+  margin: 0;
+  color: var(--vscode-editorError-foreground, var(--vscode-foreground));
+  font-size: 0.9em;
+}
+
+.rcard__cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px 16px;
+}
+
+.rlist__title {
+  margin: 0 0 4px;
+  font-size: 0.85em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--vscode-descriptionForeground);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.rlist__items {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.rlist__items li + li {
+  margin-top: 2px;
+}
+
+.rlist__empty {
+  margin: 0;
+  font-size: 0.9em;
+}
+
+.directions {
+  border: 1px solid var(--deck-border);
+  border-radius: var(--deck-radius);
+  padding: 8px 10px;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.directions__legend {
+  font-size: 0.85em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--vscode-descriptionForeground);
+  padding: 0 4px;
+}
+
+.direction {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.direction:hover {
+  background: var(--vscode-list-hoverBackground, transparent);
+}
+
+.direction--on {
+  background: var(--vscode-list-inactiveSelectionBackground, transparent);
+}
+
+.direction input {
+  margin-top: 3px;
+}
+
+.direction__text {
+  display: flex;
+  flex-direction: column;
+}
+
+.direction__label {
+  font-weight: 600;
+}
+
+.direction__desc {
+  font-size: 0.9em;
+}
+
+.rcard__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.rcard__footnote {
+  margin-left: auto;
+  font-size: 0.85em;
+}
+
+.rcard__cta-text {
+  margin: 0;
+  font-weight: 600;
+}
+
+.button--big {
+  font-size: 1.05em;
+  padding: 6px 14px;
+}
