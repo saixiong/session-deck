@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- P5: marketplace metadata, icon, walkthrough, README with screenshots; `.vsix` verified to
+  install and activate with zero configuration on a fresh profile.
 - P4: Review — headless `claude -p --json-schema` analyser (isolated: no hooks, MCP, CLAUDE.md or
   session persistence), tail-first transcript builder with compaction digest, cached reports in
   `~/.session-deck/reviews/`, batch runner with concurrency/cancel/per-session failure, and the

@@ -15,14 +15,16 @@
     "node": ">=20"
   },
   "categories": [
-    "Other"
+    "Other",
+    "Visualization"
   ],
   "keywords": [
     "claude",
     "claude code",
     "sessions",
     "favorites",
-    "dashboard"
+    "dashboard",
+    "review"
   ],
   "main": "./dist/extension.js",
   "activationEvents": [],
@@ -330,7 +332,53 @@
           "description": "Transcripts larger than this are indexed from their head and tail only; token totals for them show as approximate."
         }
       }
-    }
+    },
+    "walkthroughs": [
+      {
+        "id": "sessionDeck.welcome",
+        "title": "Get started with Session Deck",
+        "description": "Star the Claude Code sessions you keep coming back to, review where each stands, and jump back in.",
+        "steps": [
+          {
+            "id": "open",
+            "title": "Open the dashboard",
+            "description": "Everything lives on one page: a stat strip, your favorites grouped by project, live sessions and suggestions.\n[Open Dashboard](command:sessionDeck.openDashboard)",
+            "media": {
+              "image": "media/screenshot-dashboard.png",
+              "altText": "The Session Deck dashboard"
+            },
+            "completionEvents": [
+              "onCommand:sessionDeck.openDashboard"
+            ]
+          },
+          {
+            "id": "star",
+            "title": "Star a session",
+            "description": "Hover a row in the Session Deck sidebar and click its star, press Add on the dashboard, or run the command for the session running in this window.\n[Favorite Current Session](command:sessionDeck.favoriteCurrentSession)",
+            "media": {
+              "image": "media/screenshot-picker.png",
+              "altText": "The Add sessions picker"
+            },
+            "completionEvents": [
+              "onCommand:sessionDeck.favoriteCurrentSession",
+              "onCommand:sessionDeck.favorite"
+            ]
+          },
+          {
+            "id": "review",
+            "title": "Review before you resume",
+            "description": "Review sessions reads each starred transcript with the claude CLI on your own login and reports what is done, what is left, what is blocked, a priority, and directions you can take \u2014 typed into the composer, never sent.\n[Review Favorite Sessions](command:sessionDeck.reviewFavorites)",
+            "media": {
+              "image": "media/screenshot-review.png",
+              "altText": "The Review modal"
+            },
+            "completionEvents": [
+              "onCommand:sessionDeck.reviewFavorites"
+            ]
+          }
+        ]
+      }
+    ]
   },
   "scripts": {
     "build": "node esbuild.mjs",
@@ -367,5 +415,27 @@
     "typescript-eslint": "^8.70.0",
     "vitest": "^4.1.0"
   },
-  "packageManager": "pnpm@10.33.4"
+  "packageManager": "pnpm@10.33.4",
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#0b3d91",
+    "theme": "dark"
+  },
+  "bugs": {
+    "url": "https://github.com/saixiong/session-deck/issues"
+  },
+  "homepage": "https://github.com/saixiong/session-deck#readme",
+  "extensionKind": [
+    "workspace"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true,
+      "description": "Session Deck reads only ~/.claude and its own data dir; workspace contents are never read or executed."
+    },
+    "virtualWorkspaces": {
+      "supported": false,
+      "description": "Session Deck reads local files under ~/.claude."
+    }
+  }
 }
