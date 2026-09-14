@@ -1,7 +1,12 @@
 import * as vscode from 'vscode'
-import type { DashboardState, HostToWebview } from '../../shared/messages'
+import { isVisibleEntry } from '../../index/createIndexer'
+import { computeStats, formatCount, isPeriod } from '../../index/stats'
+import type { Services } from '../../services'
+import type { DashboardState, HostToWebview, Period, StatTileData } from '../../shared/messages'
 import { isWebviewToHost } from '../../shared/messages'
 import { renderDashboardHtml } from './html'
+
+const PERIOD_KEY = 'sessionDeck.dashboard.period'
 
 /**
  * Hosts the dashboard webview. One panel per window: opening it again
@@ -14,8 +19,9 @@ export class DashboardPanel {
   private static current: DashboardPanel | undefined
 
   private readonly disposables: vscode.Disposable[] = []
+  private pushTimer: NodeJS.Timeout | undefined
 
-  static show(context: vscode.ExtensionContext): DashboardPanel {
+  static show(services: Services): DashboardPanel {
     const column = vscode.window.activeTextEditor?.viewColumn ?? vscode.ViewColumn.One
     if (DashboardPanel.current) {
       DashboardPanel.current.panel.reveal(column)
@@ -28,10 +34,10 @@ export class DashboardPanel {
       {
         enableScripts: true,
         retainContextWhenHidden: true,
-        localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'dist', 'webview')],
+        localResourceRoots: [vscode.Uri.joinPath(services.context.extensionUri, 'dist', 'webview')],
       }
     )
-    DashboardPanel.current = new DashboardPanel(panel, context)
+    DashboardPanel.current = new DashboardPanel(panel, services)
     return DashboardPanel.current
   }
 
@@ -39,15 +45,17 @@ export class DashboardPanel {
    * Re-adopts a panel VS Code restored from a previous window session, so the
    * tab is live after a restart instead of an empty shell.
    */
-  static register(context: vscode.ExtensionContext): vscode.Disposable {
+  static register(services: Services): vscode.Disposable {
     return vscode.window.registerWebviewPanelSerializer(DashboardPanel.viewType, {
       deserializeWebviewPanel(panel: vscode.WebviewPanel): Thenable<void> {
         panel.webview.options = {
           enableScripts: true,
-          localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'dist', 'webview')],
+          localResourceRoots: [
+            vscode.Uri.joinPath(services.context.extensionUri, 'dist', 'webview'),
+          ],
         }
         DashboardPanel.current?.panel.dispose()
-        DashboardPanel.current = new DashboardPanel(panel, context)
+        DashboardPanel.current = new DashboardPanel(panel, services)
         return Promise.resolve()
       },
     })
@@ -55,18 +63,27 @@ export class DashboardPanel {
 
   private constructor(
     private readonly panel: vscode.WebviewPanel,
-    private readonly context: vscode.ExtensionContext
+    private readonly services: Services
   ) {
+    const { context } = services
     panel.iconPath = vscode.Uri.joinPath(context.extensionUri, 'media', 'deck.svg')
     panel.webview.html = this.html()
     panel.onDidDispose(() => this.dispose(), null, this.disposables)
-    panel.webview.onDidReceiveMessage((raw: unknown) => this.onMessage(raw), null, this.disposables)
+    panel.webview.onDidReceiveMessage(
+      (raw: unknown) => void this.onMessage(raw),
+      null,
+      this.disposables
+    )
+    // Index changes arrive in bursts while the full tier runs; coalesce them.
+    this.disposables.push(services.onDidChangeIndex(() => this.schedulePush()))
   }
 
   private html(): string {
     const asset = (name: string) =>
       this.panel.webview
-        .asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'webview', name))
+        .asWebviewUri(
+          vscode.Uri.joinPath(this.services.context.extensionUri, 'dist', 'webview', name)
+        )
         .toString()
     return renderDashboardHtml(this.panel.webview, {
       script: asset('index.js'),
@@ -74,12 +91,12 @@ export class DashboardPanel {
     })
   }
 
-  private onMessage(raw: unknown): void {
+  private async onMessage(raw: unknown): Promise<void> {
     // A message we do not recognise is a version skew, not an error.
     if (!isWebviewToHost(raw)) return
     switch (raw.type) {
       case 'ready':
-        void this.send({ type: 'state', state: this.placeholderState() })
+        await this.push()
         return
       case 'openExternal': {
         // The webview is trusted code, but a link it renders may not be:
@@ -88,26 +105,88 @@ export class DashboardPanel {
         if (uri.scheme === 'https' || uri.scheme === 'http') void vscode.env.openExternal(uri)
         return
       }
+      case 'setPeriod':
+        await this.services.context.globalState.update(PERIOD_KEY, raw.period)
+        await this.push()
+        return
       case 'command':
-        void this.send({ type: 'state', state: this.placeholderState() })
+        if (raw.command === 'reindex') await this.services.indexer.reindex()
+        else await this.services.indexer.refresh()
+        await this.push()
         return
     }
   }
 
-  /** P0: the stat strip is wired but reads nothing yet. P1 replaces this with the index. */
-  private placeholderState(): DashboardState {
-    const version = (this.context.extension.packageJSON as { version?: string }).version ?? '0.0.0'
+  private get period(): Period {
+    const stored = this.services.context.globalState.get<unknown>(PERIOD_KEY)
+    return isPeriod(stored) ? stored : '24h'
+  }
+
+  private schedulePush(): void {
+    if (this.pushTimer) return
+    this.pushTimer = setTimeout(() => {
+      this.pushTimer = undefined
+      void this.push()
+    }, 250)
+  }
+
+  private async push(): Promise<void> {
+    const state = await this.buildState()
+    await this.send({ type: 'state', state })
+  }
+
+  private async buildState(): Promise<DashboardState> {
+    const { indexer, settings } = this.services
+    const period = this.period
+    const visible = indexer.getAll().filter((e) => isVisibleEntry(e, settings))
+    const live = await indexer.liveSessions()
+    const stats = computeStats(visible, live, period)
+    const status = indexer.status()
+    const indexValue = status.scanning
+      ? `${status.complete} / ${status.total}`
+      : status.total === 0
+        ? 'empty'
+        : String(status.total)
+    const indexHint = status.scanning
+      ? 'indexing…'
+      : status.parseErrors
+        ? `${status.parseErrors} unreadable lines`
+        : 'up to date'
+    const hiddenNote = settings.showSdkSessions ? '' : ' · SDK sessions hidden'
+    const tiles: StatTileData[] = [
+      { id: 'live', label: 'Live', value: String(stats.live), hint: 'running now' },
+      { id: 'active', label: 'Active', value: String(stats.active), hint: `in ${period}` },
+      {
+        id: 'tokens',
+        label: 'Output tokens',
+        value: `${stats.approximate ? '≈' : ''}${formatCount(stats.outputTokens)}`,
+        hint: `sessions active in ${period}`,
+        tooltip:
+          'Whole-session totals for sessions active in the period. ≈ while some are still indexing.',
+      },
+      { id: 'prs', label: 'PRs', value: String(stats.prs), hint: `linked, active in ${period}` },
+      { id: 'favorites', label: 'Favorites', value: '0', hint: 'arrives in P2' },
+      {
+        id: 'index',
+        label: 'Index',
+        value: indexValue,
+        hint: indexHint,
+        tooltip: `${status.total} sessions · ${status.complete} complete · ${status.pending} pending · ${status.fastOnly} head/tail only · ${status.missing} missing${hiddenNote}`,
+      },
+    ]
     return {
-      extensionVersion: version,
-      phase: 'P0',
-      stats: [
-        { id: 'live', label: 'Live', value: '—', hint: 'sessions running now' },
-        { id: 'active', label: 'Active', value: '—', hint: 'in period' },
-        { id: 'tokens', label: 'Output tokens', value: '—', hint: 'in period' },
-        { id: 'prs', label: 'PRs', value: '—', hint: 'linked in period' },
-        { id: 'favorites', label: 'Favorites', value: '0' },
-        { id: 'index', label: 'Index', value: 'not built', hint: 'arrives in P1' },
-      ],
+      extensionVersion: this.services.version,
+      period,
+      stats: tiles,
+      index: {
+        total: status.total,
+        complete: status.complete,
+        pending: status.pending,
+        fastOnly: status.fastOnly,
+        missing: status.missing,
+        parseErrors: status.parseErrors,
+        scanning: status.scanning,
+      },
     }
   }
 
@@ -117,6 +196,7 @@ export class DashboardPanel {
 
   private dispose(): void {
     DashboardPanel.current = undefined
+    if (this.pushTimer) clearTimeout(this.pushTimer)
     for (const d of this.disposables.splice(0)) d.dispose()
   }
 }

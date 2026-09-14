@@ -7,9 +7,11 @@
  * are the runtime guards the receivers use, because postMessage is untyped and
  * a stale webview talking to a newer host must be ignored, never crash it.
  *
- * P0 ships the handshake and a placeholder state. Later phases add favorites,
- * index, review and open messages here — and nowhere else.
+ * Later phases add favorites, review and open messages here — and nowhere else.
  */
+
+export type Period = '24h' | '7d' | '30d'
+export const PERIODS: readonly Period[] = ['24h', '7d', '30d']
 
 export interface StatTileData {
   id: string
@@ -21,20 +23,39 @@ export interface StatTileData {
   tooltip?: string
 }
 
+export interface IndexSummary {
+  total: number
+  complete: number
+  pending: number
+  fastOnly: number
+  missing: number
+  parseErrors: number
+  scanning: boolean
+}
+
 export interface DashboardState {
   extensionVersion: string
-  /** Which phase of the spec the running build implements — surfaced in the UI while scaffolding. */
-  phase: 'P0'
+  period: Period
   stats: StatTileData[]
+  index: IndexSummary
 }
 
 export type HostToWebview = { type: 'state'; state: DashboardState }
 
 export type WebviewToHost =
-  { type: 'ready' } | { type: 'openExternal'; url: string } | { type: 'command'; command: 'reload' }
+  | { type: 'ready' }
+  | { type: 'openExternal'; url: string }
+  | { type: 'setPeriod'; period: Period }
+  | { type: 'command'; command: 'reload' | 'reindex' }
 
 const HOST_TYPES: ReadonlySet<string> = new Set(['state'])
-const WEBVIEW_TYPES: ReadonlySet<string> = new Set(['ready', 'openExternal', 'command'])
+const WEBVIEW_TYPES: ReadonlySet<string> = new Set([
+  'ready',
+  'openExternal',
+  'setPeriod',
+  'command',
+])
+const COMMANDS: ReadonlySet<string> = new Set(['reload', 'reindex'])
 
 function hasType(value: unknown): value is { type: string } {
   return (
@@ -53,8 +74,12 @@ export function isWebviewToHost(value: unknown): value is WebviewToHost {
   if (value.type === 'openExternal') {
     return typeof (value as { url?: unknown }).url === 'string'
   }
+  if (value.type === 'setPeriod') {
+    return PERIODS.includes((value as { period?: unknown }).period as Period)
+  }
   if (value.type === 'command') {
-    return (value as { command?: unknown }).command === 'reload'
+    const command = (value as { command?: unknown }).command
+    return typeof command === 'string' && COMMANDS.has(command)
   }
   return true
 }

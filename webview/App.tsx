@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'preact/hooks'
-import type { DashboardState } from '../src/shared/messages'
+import type { DashboardState, Period } from '../src/shared/messages'
+import { PERIODS } from '../src/shared/messages'
 import { onHostMessage, post } from './vscodeApi'
 import { StatStrip } from './components/StatStrip'
 import { Section } from './components/Section'
 
 /**
- * The dashboard shell. P0 renders the real layout — header, stat strip, the
- * always-present Favorites section, and the shelves — over placeholder data,
- * so the theme work and the message plumbing are proven before any of the
- * data exists.
+ * The dashboard shell. The layout — header, stat strip, the always-present
+ * Favorites section, and the shelves — is final; the sections fill in as the
+ * phases land (favorites P2/P3, review P4).
  */
 export function App() {
   const [state, setState] = useState<DashboardState | null>(null)
@@ -29,6 +29,10 @@ export function App() {
     )
   }
 
+  const indexLine = state.index.scanning
+    ? `Indexing ${state.index.complete} of ${state.index.total} sessions…`
+    : `${state.index.total} sessions indexed`
+
   return (
     <main class="deck">
       <header class="deck__header">
@@ -36,8 +40,20 @@ export function App() {
           <span class="codicon codicon-dashboard" aria-hidden="true" /> Session Deck
         </h1>
         <div class="deck__controls" role="group" aria-label="View options">
-          <select class="control" aria-label="Period" disabled>
-            <option>24h</option>
+          <select
+            class="control"
+            aria-label="Period"
+            value={state.period}
+            onChange={(e) => {
+              const period = e.currentTarget.value as Period
+              post({ type: 'setPeriod', period })
+            }}
+          >
+            {PERIODS.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
           </select>
           <button class="control" type="button" disabled aria-pressed="true" title="Grid view">
             <span class="codicon codicon-layout" aria-hidden="true" />
@@ -48,7 +64,8 @@ export function App() {
           <button
             class="control control--icon"
             type="button"
-            title="Reload"
+            title="Refresh index"
+            aria-label="Refresh index"
             onClick={() => post({ type: 'command', command: 'reload' })}
           >
             <span class="codicon codicon-refresh" aria-hidden="true" />
@@ -72,13 +89,12 @@ export function App() {
           <div class="tip__body" aria-live="polite">
             <span class="codicon codicon-lightbulb" aria-hidden="true" />
             <p>
-              <strong>Nothing starred yet.</strong> Once the session index is in place (P1), star a
-              session from the Session Deck sidebar or run{' '}
-              <kbd>Session Deck: Favorite current session</kbd>.
+              <strong>Nothing starred yet.</strong> Star a session from the Session Deck sidebar or
+              run <kbd>Session Deck: Favorite current session</kbd> (arrives in P2).
             </p>
           </div>
           <div class="tip__how">
-            Scaffold build — phase {state.phase}, v{state.extensionVersion}.
+            {indexLine} · Session Deck v{state.extensionVersion}
           </div>
         </div>
       </Section>

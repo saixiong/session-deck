@@ -33,6 +33,17 @@
         "title": "Open Dashboard",
         "category": "Session Deck",
         "icon": "$(dashboard)"
+      },
+      {
+        "command": "sessionDeck.reindex",
+        "title": "Re-index Sessions",
+        "category": "Session Deck",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "sessionDeck.showOutput",
+        "title": "Show Output",
+        "category": "Session Deck"
       }
     ],
     "keybindings": [
