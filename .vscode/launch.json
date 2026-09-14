@@ -6,7 +6,7 @@
       "type": "extensionHost",
       "request": "launch",
       "args": ["--extensionDevelopmentPath=${workspaceFolder}"],
-      "outFiles": ["${workspaceFolder}/dist/**/*.js"],
+      "outFiles": ["${workspaceFolder}/dist/**/*.js", "${workspaceFolder}/out/**/*.js"],
       "preLaunchTask": "build"
     },
     {
@@ -15,9 +15,9 @@
       "request": "launch",
       "args": [
         "--extensionDevelopmentPath=${workspaceFolder}",
-        "--extensionTestsPath=${workspaceFolder}/dist/test/e2e"
+        "--extensionTestsPath=${workspaceFolder}/out/test/e2e"
       ],
-      "outFiles": ["${workspaceFolder}/dist/**/*.js"],
+      "outFiles": ["${workspaceFolder}/dist/**/*.js", "${workspaceFolder}/out/**/*.js"],
       "preLaunchTask": "build"
     }
   ]

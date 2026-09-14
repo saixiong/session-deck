@@ -13,7 +13,8 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('sessionDeck.openDashboard', () => {
       DashboardPanel.show(context)
     }),
-    vscode.window.registerTreeDataProvider('sessionDeck.sessions', new EmptySessionsProvider())
+    vscode.window.registerTreeDataProvider('sessionDeck.sessions', new EmptySessionsProvider()),
+    DashboardPanel.register(context)
   )
 }
 

@@ -19,13 +19,11 @@ interface Props {
  */
 export function Section({ title, subtitle, count, icon, quiet, actions, children }: Props) {
   const [open, setOpen] = useState(true)
+  const id = `section-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
   return (
-    <section
-      class={`section${quiet ? ' section--quiet' : ''}`}
-      aria-labelledby={`section-${title}`}
-    >
+    <section class={`section${quiet ? ' section--quiet' : ''}`} aria-labelledby={id}>
       <header class="section__header">
-        <h2 class="section__title" id={`section-${title}`}>
+        <h2 class="section__title" id={id}>
           <span class={`codicon codicon-${icon}`} aria-hidden="true" /> {title}
           <span class="badge" aria-label={`${count} items`}>
             {count}

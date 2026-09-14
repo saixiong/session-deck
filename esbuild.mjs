@@ -30,7 +30,7 @@ const host = await esbuild.context({
 const e2e = await esbuild.context({
   ...common,
   entryPoints: ['test/e2e/extension.test.ts'],
-  outfile: 'dist/test/e2e/extension.test.js',
+  outfile: 'out/test/e2e/extension.test.js',
   format: 'cjs',
   platform: 'node',
   external: ['vscode', 'mocha'],

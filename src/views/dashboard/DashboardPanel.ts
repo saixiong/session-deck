@@ -35,6 +35,24 @@ export class DashboardPanel {
     return DashboardPanel.current
   }
 
+  /**
+   * Re-adopts a panel VS Code restored from a previous window session, so the
+   * tab is live after a restart instead of an empty shell.
+   */
+  static register(context: vscode.ExtensionContext): vscode.Disposable {
+    return vscode.window.registerWebviewPanelSerializer(DashboardPanel.viewType, {
+      deserializeWebviewPanel(panel: vscode.WebviewPanel): Thenable<void> {
+        panel.webview.options = {
+          enableScripts: true,
+          localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'dist', 'webview')],
+        }
+        DashboardPanel.current?.panel.dispose()
+        DashboardPanel.current = new DashboardPanel(panel, context)
+        return Promise.resolve()
+      },
+    })
+  }
+
   private constructor(
     private readonly panel: vscode.WebviewPanel,
     private readonly context: vscode.ExtensionContext
@@ -63,9 +81,13 @@ export class DashboardPanel {
       case 'ready':
         void this.send({ type: 'state', state: this.placeholderState() })
         return
-      case 'openExternal':
-        void vscode.env.openExternal(vscode.Uri.parse(raw.url))
+      case 'openExternal': {
+        // The webview is trusted code, but a link it renders may not be:
+        // only web URLs leave the editor.
+        const uri = vscode.Uri.parse(raw.url)
+        if (uri.scheme === 'https' || uri.scheme === 'http') void vscode.env.openExternal(uri)
         return
+      }
       case 'command':
         void this.send({ type: 'state', state: this.placeholderState() })
         return
