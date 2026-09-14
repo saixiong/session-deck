@@ -6,7 +6,7 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx",
     "jsxImportSource": "preact",
-    "types": []
+    "types": ["vitest/globals"]
   },
   "include": ["webview/**/*.ts", "webview/**/*.tsx", "webview/**/*.d.ts", "src/shared/**/*.ts"],
   "exclude": ["src/shared/**/*.test.ts"]

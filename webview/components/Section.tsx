@@ -1,29 +1,42 @@
 import type { ComponentChildren } from 'preact'
-import { useState } from 'preact/hooks'
 
 interface Props {
+  id: string
   title: string
-  subtitle?: string
+  subtitle?: string | undefined
   count: number
   icon: string
   /** Suggested/Live shelves are visually quieter than the curated section. */
   quiet?: boolean
   actions?: ComponentChildren
+  collapsed: boolean
+  onToggle: (open: boolean) => void
   children: ComponentChildren
 }
 
 /**
- * A dashboard section. Always renders, even when empty — the empty state is
- * the onboarding (Snippbot Dashboard D9). Collapse state is local for now;
- * P3 persists it.
+ * A dashboard section. The curated section always renders, even when empty —
+ * the empty state is the onboarding (Snippbot Dashboard D9). Collapse state
+ * is owned by the host's prefs so every window agrees.
  */
-export function Section({ title, subtitle, count, icon, quiet, actions, children }: Props) {
-  const [open, setOpen] = useState(true)
-  const id = `section-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
+export function Section({
+  id,
+  title,
+  subtitle,
+  count,
+  icon,
+  quiet,
+  actions,
+  collapsed,
+  onToggle,
+  children,
+}: Props) {
+  const open = !collapsed
+  const headingId = `section-${id}`
   return (
-    <section class={`section${quiet ? ' section--quiet' : ''}`} aria-labelledby={id}>
+    <section class={`section${quiet ? ' section--quiet' : ''}`} aria-labelledby={headingId}>
       <header class="section__header">
-        <h2 class="section__title" id={id}>
+        <h2 class="section__title" id={headingId}>
           <span class={`codicon codicon-${icon}`} aria-hidden="true" /> {title}
           <span class="badge" aria-label={`${count} items`}>
             {count}
@@ -37,7 +50,7 @@ export function Section({ title, subtitle, count, icon, quiet, actions, children
             type="button"
             aria-expanded={open}
             aria-label={open ? `Collapse ${title}` : `Expand ${title}`}
-            onClick={() => setOpen((v) => !v)}
+            onClick={() => onToggle(!open)}
           >
             <span class={`codicon codicon-chevron-${open ? 'up' : 'down'}`} aria-hidden="true" />
           </button>

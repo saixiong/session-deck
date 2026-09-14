@@ -3,15 +3,26 @@ import { isHostToWebview, isWebviewToHost } from './messages'
 
 describe('postMessage guards', () => {
   it('accepts every WebviewToHost shape', () => {
-    expect(isWebviewToHost({ type: 'ready' })).toBe(true)
-    expect(isWebviewToHost({ type: 'openExternal', url: 'https://x' })).toBe(true)
-    expect(isWebviewToHost({ type: 'command', command: 'reload' })).toBe(true)
-    expect(isWebviewToHost({ type: 'command', command: 'reindex' })).toBe(true)
-    expect(isWebviewToHost({ type: 'setPeriod', period: '7d' })).toBe(true)
+    const ok: unknown[] = [
+      { type: 'ready' },
+      { type: 'openExternal', url: 'https://x' },
+      { type: 'command', command: 'reload' },
+      { type: 'command', command: 'reindex' },
+      { type: 'setPeriod', period: '7d' },
+      { type: 'setPrefs', prefs: { view: 'list' } },
+      { type: 'toggleFavorite', entityType: 'session', entityId: 'a', label: 'A' },
+      { type: 'removeFavorite', id: 'fav_1' },
+      { type: 'moveFavorite', id: 'fav_1', beforeId: null },
+      { type: 'moveFavorite', id: 'fav_1', beforeId: 'fav_2' },
+      { type: 'open', entityType: 'session', entityId: 'a' },
+      { type: 'open', entityType: 'session', entityId: 'a', prompt: 'go', target: 'window' },
+      { type: 'browse', entityType: 'session', query: '', limit: 50 },
+    ]
+    for (const m of ok) expect(isWebviewToHost(m), JSON.stringify(m)).toBe(true)
   })
 
   it('rejects malformed or unknown messages instead of throwing', () => {
-    for (const bad of [
+    const bad: unknown[] = [
       null,
       undefined,
       42,
@@ -21,13 +32,22 @@ describe('postMessage guards', () => {
       { type: 'openExternal' },
       { type: 'command', command: 'rm -rf' },
       { type: 'setPeriod', period: '1y' },
-    ]) {
-      expect(isWebviewToHost(bad)).toBe(false)
-      expect(isHostToWebview(bad)).toBe(false)
+      { type: 'setPrefs' },
+      { type: 'toggleFavorite', entityType: 'alien', entityId: 'a', label: 'A' },
+      { type: 'toggleFavorite', entityType: 'session', entityId: 'a' },
+      { type: 'moveFavorite', id: 'fav_1' },
+      { type: 'open', entityType: 'session', entityId: 'a', target: 'moon' },
+      { type: 'browse', entityType: 'session', query: '' },
+    ]
+    for (const m of bad) {
+      expect(isWebviewToHost(m), JSON.stringify(m)).toBe(false)
+      expect(isHostToWebview(m)).toBe(false)
     }
   })
 
-  it('accepts a state message', () => {
+  it('accepts host messages', () => {
     expect(isHostToWebview({ type: 'state', state: {} })).toBe(true)
+    expect(isHostToWebview({ type: 'candidates', payload: {} })).toBe(true)
+    expect(isHostToWebview({ type: 'toast', level: 'info', text: 'hi' })).toBe(true)
   })
 })

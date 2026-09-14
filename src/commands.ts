@@ -55,6 +55,26 @@ export function registerCommands(
       }
     ),
 
+    vscode.commands.registerCommand('sessionDeck.openSessionWithPrompt', async (arg: unknown) => {
+      const sessionId = sessionIdOf(arg)
+      if (!sessionId) return
+      const prompt = await vscode.window.showInputBox({
+        title: `Open "${labelFor(sessionId)}" with a prompt`,
+        prompt: 'Typed into the composer, not sent.',
+        placeHolder: 'Continue where we left off…',
+      })
+      if (prompt === undefined) return
+      const entry = indexer.get(sessionId)
+      await opener.open({ sessionId, prompt, ...(entry?.cwd ? { cwd: entry.cwd } : {}) })
+    }),
+
+    vscode.commands.registerCommand('sessionDeck.openSessionInWindow', async (arg: unknown) => {
+      const sessionId = sessionIdOf(arg)
+      if (!sessionId) return
+      const entry = indexer.get(sessionId)
+      await opener.open({ sessionId, target: 'window', ...(entry?.cwd ? { cwd: entry.cwd } : {}) })
+    }),
+
     vscode.commands.registerCommand('sessionDeck.favorite', async (arg: unknown) => {
       const sessionId = sessionIdOf(arg)
       if (sessionId) await star(sessionId)

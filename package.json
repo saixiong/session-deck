@@ -64,6 +64,16 @@
         "icon": "$(go-to-file)"
       },
       {
+        "command": "sessionDeck.openSessionWithPrompt",
+        "title": "Open Session with Prompt\u2026",
+        "category": "Session Deck"
+      },
+      {
+        "command": "sessionDeck.openSessionInWindow",
+        "title": "Open Session in New Window",
+        "category": "Session Deck"
+      },
+      {
         "command": "sessionDeck.copySessionId",
         "title": "Copy Session Id",
         "category": "Session Deck"
@@ -156,6 +166,14 @@
         {
           "command": "sessionDeck.openSession",
           "when": "false"
+        },
+        {
+          "command": "sessionDeck.openSessionWithPrompt",
+          "when": "false"
+        },
+        {
+          "command": "sessionDeck.openSessionInWindow",
+          "when": "false"
         }
       ],
       "view/title": [
@@ -190,6 +208,16 @@
           "command": "sessionDeck.openSession",
           "when": "view == sessionDeck.sessions && viewItem =~ /^session:/ && viewItem =~ /^((?!missing).)*$/",
           "group": "1_open@1"
+        },
+        {
+          "command": "sessionDeck.openSessionWithPrompt",
+          "when": "view == sessionDeck.sessions && viewItem =~ /^session:/ && viewItem =~ /^((?!missing).)*$/",
+          "group": "1_open@2"
+        },
+        {
+          "command": "sessionDeck.openSessionInWindow",
+          "when": "view == sessionDeck.sessions && viewItem =~ /^session:/ && viewItem =~ /^((?!missing).)*$/",
+          "group": "1_open@3"
         },
         {
           "command": "sessionDeck.favorite",
@@ -301,6 +329,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.0",
+    "@testing-library/preact": "^3.2.4",
     "@types/mocha": "^10.0.10",
     "@types/node": "^22.19.0",
     "@types/vscode": "^1.130.0",
@@ -310,6 +339,7 @@
     "@vscode/vsce": "^3.9.2",
     "esbuild": "^0.28.2",
     "eslint": "^9.39.0",
+    "happy-dom": "^20.14.5",
     "mocha": "^11.7.0",
     "preact": "^10.29.0",
     "prettier": "^3.9.0",

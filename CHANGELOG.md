@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- P3: the dashboard — favorites grouped by project (workspace first), grid/list, verbose switch,
+  tip decks with a pinned how-to, per-section picker (no Save), Live and Suggested shelves,
+  drag-to-reorder, missing cards; SessionOpener with panel / new-window / terminal paths and
+  seeded (never sent) prompts; `Open Session with Prompt…` and `Open in New Window` in the tree.
 - P2: favorites store (`~/.session-deck/favorites.json`, atomic, idempotent, fractional reorder,
   cross-window watcher), resolver registry with the `session` resolver, sidebar tree
   (Favorites by project → Live now → Recent, inline stars, context menu), `Favorite Current

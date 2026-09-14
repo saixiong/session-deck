@@ -6,9 +6,8 @@
  * `postMessage` is one of these unions; `isWebviewToHost` / `isHostToWebview`
  * are the runtime guards the receivers use, because postMessage is untyped and
  * a stale webview talking to a newer host must be ignored, never crash it.
- *
- * Later phases add favorites, review and open messages here — and nowhere else.
  */
+import type { FavoriteCard, FavoriteEntityType, FavoriteGroup } from './cards'
 
 export type Period = '24h' | '7d' | '30d'
 export const PERIODS: readonly Period[] = ['24h', '7d', '30d']
@@ -33,29 +32,87 @@ export interface IndexSummary {
   scanning: boolean
 }
 
+/** Per-user view preferences, persisted by the host (globalState) so windows agree. */
+export interface DashboardPrefs {
+  view: 'grid' | 'list'
+  verbose: boolean
+  /** Section tip strips the user explicitly expanded/collapsed, by entity type. */
+  tips: Record<string, boolean>
+  /** Collapsed sections, by section id. */
+  collapsed: Record<string, boolean>
+}
+
+export const DEFAULT_PREFS: DashboardPrefs = {
+  view: 'grid',
+  verbose: true,
+  tips: {},
+  collapsed: {},
+}
+
 export interface DashboardState {
   extensionVersion: string
   period: Period
   stats: StatTileData[]
   index: IndexSummary
+  prefs: DashboardPrefs
+  groups: FavoriteGroup[]
+  live: FavoriteCard[]
+  suggested: FavoriteCard[]
+  /** Group keys of the current workspace folders, so those groups sort first. */
+  workspaceKeys: string[]
+  /** Which entity types can be browsed by the picker. */
+  browsable: FavoriteEntityType[]
 }
 
-export type HostToWebview = { type: 'state'; state: DashboardState }
+export interface CandidatesPayload {
+  entityType: FavoriteEntityType
+  query: string
+  items: Array<FavoriteCard & { favorited: boolean }>
+  total: number
+  limit: number
+}
+
+export type HostToWebview =
+  | { type: 'state'; state: DashboardState }
+  | { type: 'candidates'; payload: CandidatesPayload }
+  | { type: 'toast'; level: 'info' | 'warn' | 'error'; text: string }
+
+export type OpenTargetChoice = 'default' | 'window' | 'terminal'
 
 export type WebviewToHost =
   | { type: 'ready' }
   | { type: 'openExternal'; url: string }
   | { type: 'setPeriod'; period: Period }
+  | { type: 'setPrefs'; prefs: Partial<DashboardPrefs> }
   | { type: 'command'; command: 'reload' | 'reindex' }
+  | { type: 'toggleFavorite'; entityType: FavoriteEntityType; entityId: string; label: string }
+  | { type: 'removeFavorite'; id: string }
+  | { type: 'moveFavorite'; id: string; beforeId: string | null }
+  | {
+      type: 'open'
+      entityType: FavoriteEntityType
+      entityId: string
+      prompt?: string
+      target?: OpenTargetChoice
+    }
+  | { type: 'browse'; entityType: FavoriteEntityType; query: string; limit: number }
 
-const HOST_TYPES: ReadonlySet<string> = new Set(['state'])
+const HOST_TYPES: ReadonlySet<string> = new Set(['state', 'candidates', 'toast'])
 const WEBVIEW_TYPES: ReadonlySet<string> = new Set([
   'ready',
   'openExternal',
   'setPeriod',
+  'setPrefs',
   'command',
+  'toggleFavorite',
+  'removeFavorite',
+  'moveFavorite',
+  'open',
+  'browse',
 ])
 const COMMANDS: ReadonlySet<string> = new Set(['reload', 'reindex'])
+const ENTITY_TYPES: ReadonlySet<string> = new Set(['session', 'project', 'pr'])
+const TARGETS: ReadonlySet<string> = new Set(['default', 'window', 'terminal'])
 
 function hasType(value: unknown): value is { type: string } {
   return (
@@ -65,21 +122,53 @@ function hasType(value: unknown): value is { type: string } {
   )
 }
 
+const str = (v: unknown): v is string => typeof v === 'string'
+
 export function isHostToWebview(value: unknown): value is HostToWebview {
   return hasType(value) && HOST_TYPES.has(value.type)
 }
 
 export function isWebviewToHost(value: unknown): value is WebviewToHost {
   if (!hasType(value) || !WEBVIEW_TYPES.has(value.type)) return false
-  if (value.type === 'openExternal') {
-    return typeof (value as { url?: unknown }).url === 'string'
+  const v = value as Record<string, unknown>
+  switch (value.type) {
+    case 'ready':
+      return true
+    case 'openExternal':
+      return str(v['url'])
+    case 'setPeriod':
+      return PERIODS.includes(v['period'] as Period)
+    case 'setPrefs':
+      return typeof v['prefs'] === 'object' && v['prefs'] !== null
+    case 'command':
+      return str(v['command']) && COMMANDS.has(v['command'])
+    case 'toggleFavorite':
+      return (
+        str(v['entityType']) &&
+        ENTITY_TYPES.has(v['entityType']) &&
+        str(v['entityId']) &&
+        str(v['label'])
+      )
+    case 'removeFavorite':
+      return str(v['id'])
+    case 'moveFavorite':
+      return str(v['id']) && (v['beforeId'] === null || str(v['beforeId']))
+    case 'open':
+      return (
+        str(v['entityType']) &&
+        ENTITY_TYPES.has(v['entityType']) &&
+        str(v['entityId']) &&
+        (v['prompt'] === undefined || str(v['prompt'])) &&
+        (v['target'] === undefined || (str(v['target']) && TARGETS.has(v['target'])))
+      )
+    case 'browse':
+      return (
+        str(v['entityType']) &&
+        ENTITY_TYPES.has(v['entityType']) &&
+        str(v['query']) &&
+        typeof v['limit'] === 'number'
+      )
+    default:
+      return false
   }
-  if (value.type === 'setPeriod') {
-    return PERIODS.includes((value as { period?: unknown }).period as Period)
-  }
-  if (value.type === 'command') {
-    const command = (value as { command?: unknown }).command
-    return typeof command === 'string' && COMMANDS.has(command)
-  }
-  return true
 }

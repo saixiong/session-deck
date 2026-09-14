@@ -1,24 +1,57 @@
-import { useEffect, useState } from 'preact/hooks'
-import type { DashboardState, Period } from '../src/shared/messages'
+import { useCallback, useEffect, useState } from 'preact/hooks'
+import type { FavoriteEntityType } from '../src/shared/cards'
+import type { CandidatesPayload, DashboardState, Period } from '../src/shared/messages'
 import { PERIODS } from '../src/shared/messages'
 import { onHostMessage, post } from './vscodeApi'
+import { FavoritesSection } from './components/FavoritesSection'
+import { PickerModal } from './components/PickerModal'
+import { Shelf } from './components/Shelf'
 import { StatStrip } from './components/StatStrip'
-import { Section } from './components/Section'
+
+interface Toast {
+  id: number
+  level: 'info' | 'warn' | 'error'
+  text: string
+}
 
 /**
- * The dashboard shell. The layout — header, stat strip, the always-present
- * Favorites section, and the shelves — is final; the sections fill in as the
- * phases land (favorites P2/P3, review P4).
+ * The dashboard (spec §8). Header controls → stat strip → one curated section
+ * per registered entity type (always rendered) → Live now → Suggested.
+ * All data arrives as one `state` message; the webview keeps only UI state
+ * (open picker, toasts).
  */
 export function App() {
   const [state, setState] = useState<DashboardState | null>(null)
+  const [picker, setPicker] = useState<{ entityType: FavoriteEntityType; label: string } | null>(
+    null
+  )
+  const [candidates, setCandidates] = useState<CandidatesPayload | null>(null)
+  const [toasts, setToasts] = useState<Toast[]>([])
 
   useEffect(() => {
     const off = onHostMessage((message) => {
-      if (message.type === 'state') setState(message.state)
+      switch (message.type) {
+        case 'state':
+          setState(message.state)
+          return
+        case 'candidates':
+          setCandidates(message.payload)
+          return
+        case 'toast': {
+          const id = Date.now() + Math.random()
+          setToasts((t) => [...t, { id, level: message.level, text: message.text }])
+          setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 6000)
+          return
+        }
+      }
     })
     post({ type: 'ready' })
     return off
+  }, [])
+
+  const closePicker = useCallback(() => {
+    setPicker(null)
+    setCandidates(null)
   }, [])
 
   if (!state) {
@@ -29,9 +62,11 @@ export function App() {
     )
   }
 
-  const indexLine = state.index.scanning
-    ? `Indexing ${state.index.complete} of ${state.index.total} sessions…`
-    : `${state.index.total} sessions indexed`
+  const { prefs } = state
+  const setPrefs = (patch: Partial<typeof prefs>) => post({ type: 'setPrefs', prefs: patch })
+  const favoritedByType = new Map<FavoriteEntityType, Set<string>>()
+  for (const g of state.groups)
+    favoritedByType.set(g.entityType, new Set(g.items.map((i) => i.entityId)))
 
   return (
     <main class="deck">
@@ -44,10 +79,7 @@ export function App() {
             class="control"
             aria-label="Period"
             value={state.period}
-            onChange={(e) => {
-              const period = e.currentTarget.value as Period
-              post({ type: 'setPeriod', period })
-            }}
+            onChange={(e) => post({ type: 'setPeriod', period: e.currentTarget.value as Period })}
           >
             {PERIODS.map((p) => (
               <option key={p} value={p}>
@@ -55,11 +87,34 @@ export function App() {
               </option>
             ))}
           </select>
-          <button class="control" type="button" disabled aria-pressed="true" title="Grid view">
-            <span class="codicon codicon-layout" aria-hidden="true" />
-          </button>
-          <button class="control" type="button" disabled title="List view">
-            <span class="codicon codicon-list-flat" aria-hidden="true" />
+          <span class="segmented" role="group" aria-label="Layout">
+            <button
+              class="control"
+              type="button"
+              aria-pressed={prefs.view === 'grid'}
+              title="Grid view"
+              onClick={() => setPrefs({ view: 'grid' })}
+            >
+              <span class="codicon codicon-layout" aria-hidden="true" />
+            </button>
+            <button
+              class="control"
+              type="button"
+              aria-pressed={prefs.view === 'list'}
+              title="List view"
+              onClick={() => setPrefs({ view: 'list' })}
+            >
+              <span class="codicon codicon-list-flat" aria-hidden="true" />
+            </button>
+          </span>
+          <button
+            class="control"
+            type="button"
+            aria-pressed={prefs.verbose}
+            title="Verbose: show previews and details"
+            onClick={() => setPrefs({ verbose: !prefs.verbose })}
+          >
+            <span class="codicon codicon-note" aria-hidden="true" /> Verbose
           </button>
           <button
             class="control control--icon"
@@ -75,43 +130,63 @@ export function App() {
 
       <StatStrip tiles={state.stats} />
 
-      <Section
-        title="Favorites"
-        count={0}
-        icon="star-full"
-        actions={
-          <button class="button button--primary" type="button" disabled>
-            Review sessions
-          </button>
-        }
-      >
-        <div class="tip" role="note">
-          <div class="tip__body" aria-live="polite">
-            <span class="codicon codicon-lightbulb" aria-hidden="true" />
-            <p>
-              <strong>Nothing starred yet.</strong> Star a session from the Session Deck sidebar or
-              run <kbd>Session Deck: Favorite current session</kbd> (arrives in P2).
-            </p>
-          </div>
-          <div class="tip__how">
-            {indexLine} · Session Deck v{state.extensionVersion}
-          </div>
-        </div>
-      </Section>
+      {state.groups.map((group) => (
+        <FavoritesSection
+          key={group.entityType}
+          group={group}
+          prefs={prefs}
+          workspaceKeys={state.workspaceKeys}
+          onAdd={() => setPicker({ entityType: group.entityType, label: group.label })}
+          onReview={group.entityType === 'session' ? () => undefined : undefined}
+          reviewEnabled={false}
+        />
+      ))}
 
-      <Section title="Live now" count={0} icon="pulse" quiet>
-        <p class="muted">Running Claude Code sessions will appear here.</p>
-      </Section>
-
-      <Section
+      <Shelf
+        id="live"
+        title="Live now"
+        icon="pulse"
+        cards={state.live}
+        prefs={prefs}
+        emptyText="No running Claude Code session that isn't already starred."
+      />
+      <Shelf
+        id="suggested"
         title="Suggested"
         subtitle="recently active, not yet starred"
-        count={0}
         icon="sparkle"
-        quiet
-      >
-        <p class="muted">Recent sessions will appear here.</p>
-      </Section>
+        cards={state.suggested}
+        prefs={prefs}
+        emptyText=""
+        hideWhenEmpty
+      />
+
+      {picker ? (
+        <PickerModal
+          entityType={picker.entityType}
+          label={picker.label}
+          candidates={candidates && candidates.entityType === picker.entityType ? candidates : null}
+          favoritedIds={favoritedByType.get(picker.entityType) ?? new Set()}
+          onClose={closePicker}
+        />
+      ) : null}
+
+      {toasts.length ? (
+        <div class="toasts" role="status" aria-live="polite">
+          {toasts.map((t) => (
+            <div class={`toast toast--${t.level}`} key={t.id}>
+              {t.text}
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      <footer class="deck__footer muted">
+        {state.index.scanning
+          ? `Indexing ${state.index.complete} of ${state.index.total} sessions…`
+          : `${state.index.total} sessions indexed`}{' '}
+        · Session Deck v{state.extensionVersion}
+      </footer>
     </main>
   )
 }
