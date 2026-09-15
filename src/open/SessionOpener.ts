@@ -41,6 +41,8 @@ export interface OpenRequest {
   prompt?: string
   /** The session's working directory from the index; decides the path. */
   cwd?: string
+  /** The session's title from the index — Claude Code labels its tab with it, which is how an already-open panel is recognised. */
+  title?: string
   /** Force a target regardless of the setting (e.g. the card's "Open in new window"). */
   target?: OpenTarget
 }
@@ -87,9 +89,19 @@ export class SessionOpener {
       )
       return this.viaTerminal(req)
     }
+    // Passing a prompt to a panel that is already open makes Claude Code
+    // reveal it, drop the prompt and complain. When the tab is recognisable
+    // by title, reveal it WITHOUT the prompt and skip straight to the
+    // clipboard hint — one message, ours, with the caret already in place.
+    const alreadyOpen =
+      req.prompt !== undefined && req.title !== undefined && isPanelOpen(req.title)
     const before = countClaudePanels()
     try {
-      await vscode.commands.executeCommand(OPEN_COMMAND, req.sessionId, req.prompt)
+      await vscode.commands.executeCommand(
+        OPEN_COMMAND,
+        req.sessionId,
+        alreadyOpen ? undefined : req.prompt
+      )
     } catch (err) {
       this.output.appendLine(`[open] ${OPEN_COMMAND} failed: ${String(err)}`)
       return this.fail(`could not open the session (${String(err)})`)
@@ -100,9 +112,13 @@ export class SessionOpener {
     if (!req.prompt) return { ok: true, via: 'panel', prompt: 'none' }
     // A new panel takes the prompt; an existing one is only revealed. The
     // extension gives no answer either way, so watch for a tab to appear.
-    const opened = await waitFor(() => countClaudePanels() > before, NEW_TAB_WAIT_MS)
+    const opened = alreadyOpen
+      ? false
+      : await waitFor(() => countClaudePanels() > before, NEW_TAB_WAIT_MS)
     if (opened) return { ok: true, via: 'panel', prompt: 'seeded' }
-    this.output.appendLine(`[open] ${req.sessionId} was already open; prompt left on the clipboard`)
+    this.output.appendLine(
+      `[open] ${req.sessionId} was already open (${alreadyOpen ? 'matched by title' : 'no new tab'}); prompt left on the clipboard`
+    )
     if (commands.includes(FOCUS_INPUT_COMMAND)) {
       // Put the caret in that panel's composer so ⌘V lands in the right place.
       await vscode.commands.executeCommand(FOCUS_INPUT_COMMAND)
@@ -210,6 +226,25 @@ export function isInsideWorkspace(
 }
 
 const NEW_TAB_WAIT_MS = 1500
+
+/** Is a Claude Code panel whose tab is labelled `title` open in this window? */
+export function isPanelOpen(title: string, groups = vscode.window.tabGroups.all): boolean {
+  const want = normalizeTitle(title)
+  if (!want) return false
+  for (const g of groups)
+    for (const t of g.tabs)
+      if (
+        t.input instanceof vscode.TabInputWebview &&
+        t.input.viewType === CLAUDE_PANEL_VIEW_TYPE &&
+        normalizeTitle(t.label) === want
+      )
+        return true
+  return false
+}
+
+function normalizeTitle(s: string): string {
+  return s.replace(/\s+/g, ' ').trim()
+}
 
 /**
  * How many Claude Code session panels this window has open. A count, not a

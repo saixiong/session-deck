@@ -4,6 +4,11 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import * as vscode from 'vscode'
 import type { SessionDeckApi } from '../../src/extension'
+import {
+  CLAUDE_PANEL_VIEW_TYPE,
+  countClaudePanels,
+  isPanelOpen,
+} from '../../src/open/SessionOpener'
 
 /**
  * Smoke suite run inside a real VS Code by @vscode/test-cli. The extension is
@@ -193,5 +198,33 @@ suite('Session Deck — smoke', () => {
       return found.length > 0 ? found : undefined
     })
     assert.equal(deckTabs.length, 1, 'expected exactly one Session Deck tab')
+  })
+
+  test('an open Claude Code panel is recognised by its tab (viewType + title)', async () => {
+    // Claude Code creates its session panels with viewType "claudeVSCodePanel"
+    // and labels the tab with the session title; a stand-in panel made the
+    // same way proves the detector's viewType string and title matching.
+    const before = countClaudePanels()
+    assert.equal(isPanelOpen('Fix login bug and ship'), false)
+    const panel = vscode.window.createWebviewPanel(
+      'claudeVSCodePanel',
+      'Fix login bug and ship',
+      vscode.ViewColumn.Beside
+    )
+    try {
+      await waitFor(() => (countClaudePanels() > before ? true : undefined))
+      const tab = vscode.window.tabGroups.all
+        .flatMap((g) => g.tabs)
+        .find((t) => t.label === 'Fix login bug and ship')
+      assert.ok(tab?.input instanceof vscode.TabInputWebview)
+      assert.equal(tab.input.viewType, CLAUDE_PANEL_VIEW_TYPE)
+      assert.equal(isPanelOpen('Fix login bug and ship'), true)
+      assert.equal(isPanelOpen('  Fix login bug   and ship '), true, 'whitespace-insensitive')
+      assert.equal(isPanelOpen('Some other session'), false)
+    } finally {
+      panel.dispose()
+    }
+    await waitFor(() => (countClaudePanels() === before ? true : undefined))
+    assert.equal(isPanelOpen('Fix login bug and ship'), false)
   })
 })

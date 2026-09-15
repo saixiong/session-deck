@@ -8,8 +8,9 @@
 - Review: every "Still to do" and "Blocked on" item has its own **Do this** / **Fix this** action
   that opens the session with a prompt for just that item (seeded, never sent).
 - Open: a prompt is now **always copied to the clipboard**. When the session's panel is already
-  open, Claude Code drops the prompt ("Session is already open…"); Session Deck now detects that
-  case, focuses the composer and says to paste.
+  open, Claude Code drops the prompt ("Session is already open…"); Session Deck now recognises that
+  tab by title, reveals it without the prompt (so Claude Code stays quiet), focuses the composer and
+  says to paste.
 - P6: the `/session-deck` Claude Code skill — `skills/session-deck/` (SKILL.md + a CLI bundled
   from the extension's own modules): list, review [--run], show, star/unstar over the same
   `~/.session-deck` files; `pnpm skill:install` symlinks it into `~/.claude/skills`.

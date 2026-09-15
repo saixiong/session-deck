@@ -51,6 +51,7 @@ export function registerCommands(
           sessionId,
           ...(typeof prompt === 'string' ? { prompt } : {}),
           ...(entry?.cwd ? { cwd: entry.cwd } : {}),
+          ...(entry ? { title: resolveTitle(entry) } : {}),
         }
         await opener.open(req)
       }
@@ -66,7 +67,12 @@ export function registerCommands(
       })
       if (prompt === undefined) return
       const entry = indexer.get(sessionId)
-      await opener.open({ sessionId, prompt, ...(entry?.cwd ? { cwd: entry.cwd } : {}) })
+      await opener.open({
+        sessionId,
+        prompt,
+        ...(entry?.cwd ? { cwd: entry.cwd } : {}),
+        ...(entry ? { title: resolveTitle(entry) } : {}),
+      })
     }),
 
     vscode.commands.registerCommand('sessionDeck.openSessionInWindow', async (arg: unknown) => {

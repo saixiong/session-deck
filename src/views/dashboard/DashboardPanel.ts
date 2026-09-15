@@ -2,6 +2,7 @@ import * as vscode from 'vscode'
 import { isVisibleEntry } from '../../index/createIndexer'
 import { computeStats, formatCount, isPeriod } from '../../index/stats'
 import { MAX_REVIEW_IDS } from '../../analyze/ReviewRunner'
+import { resolveTitle } from '../../index/records'
 import { buildFavoriteGroups } from '../../registry/favoritesView'
 import type { Services } from '../../services'
 import { resolveClaudeCli, type ClaudeCliLocation } from '../../util/claudeCli'
@@ -238,6 +239,7 @@ export class DashboardPanel {
           sessionId: msg.entityId,
           ...(msg.prompt ? { prompt: msg.prompt } : {}),
           ...(entry?.cwd ? { cwd: entry.cwd } : {}),
+          ...(entry ? { title: resolveTitle(entry) } : {}),
           ...(msg.target === 'window' || msg.target === 'terminal' ? { target: msg.target } : {}),
         })
         return
