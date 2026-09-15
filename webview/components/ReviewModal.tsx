@@ -2,7 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import type { FavoriteGroup } from '../../src/shared/cards'
 import { formatTimeDistance } from '../../src/shared/cards'
 import type { ReviewState } from '../../src/shared/messages'
-import type { BatchProgress, ChatReview, ReviewStatus } from '../../src/shared/review'
+import type {
+  BatchProgress,
+  ChatReview,
+  ReviewItemKind,
+  ReviewStatus,
+} from '../../src/shared/review'
+import { promptForItem } from '../../src/shared/review'
 import { post } from '../vscodeApi'
 import { Modal } from './Modal'
 
@@ -39,6 +45,12 @@ export function ReviewModal({ group, review, focus, onClose }: Props) {
 
   const rows = useMemo(() => buildRows(group, review), [group, review])
   const reviewedCount = rows.filter((r) => r.review).length
+  const scored = rows
+    .map((r) => r.review?.completion)
+    .filter((c): c is number => c !== null && c !== undefined)
+  const avgCompletion = scored.length
+    ? Math.round(scored.reduce((a, b) => a + b, 0) / scored.length)
+    : null
   const staleCount = rows.filter((r) => r.review?.stale).length
   const unreviewed = rows.filter((r) => !r.review && !r.missing)
   const pending = rows.filter((r) => !r.missing && (!r.review || r.review.stale)).map((r) => r.id)
@@ -60,6 +72,12 @@ export function ReviewModal({ group, review, focus, onClose }: Props) {
       <div class="review__head">
         <div class="review__status">
           <strong>{rows.length}</strong> starred · <strong>{reviewedCount}</strong> reviewed
+          {avgCompletion !== null ? (
+            <>
+              {' '}
+              · <strong>{avgCompletion}%</strong> complete on average
+            </>
+          ) : null}
           {staleCount ? (
             <>
               {' '}
@@ -266,6 +284,9 @@ function ReviewCard({ row }: { row: Row }) {
           <span class={`prio prio--${r.priority}`} title={r.priority_reason}>
             {r.priority} · {r.priority_label}
           </span>
+          {r.completion !== null ? (
+            <Score value={r.completion} reason={r.completion_reason} />
+          ) : null}
           <h3 class="rcard__title">{row.title}</h3>
           {r.stale ? (
             <span class="tag tag--warn" title="The transcript has moved on since this report">
@@ -290,8 +311,15 @@ function ReviewCard({ row }: { row: Row }) {
           items={r.next_steps}
           icon="circle-large-outline"
           empty="Nothing outstanding."
+          action={{ kind: 'next_step', label: 'Do this', onPick: open }}
         />
-        <List title="Blocked on" items={r.blockers} icon="warning" empty="No blockers." />
+        <List
+          title="Blocked on"
+          items={r.blockers}
+          icon="warning"
+          empty="No blockers."
+          action={{ kind: 'blocker', label: 'Fix this', onPick: open }}
+        />
       </div>
       {r.options.length ? (
         <fieldset class="directions">
@@ -442,16 +470,50 @@ function UnreviewedCard({ row, running }: { row: Row; running: boolean }) {
   )
 }
 
+/**
+ * The completion score: a number the model judged against the session's own
+ * goal (see the analyser prompt), shown as a small meter so five cards can be
+ * compared at a glance. The reason sits in the tooltip.
+ */
+function Score({ value, reason }: { value: number; reason: string }) {
+  const band = value >= 90 ? 'high' : value >= 50 ? 'mid' : 'low'
+  return (
+    <span
+      class={`score score--${band}`}
+      role="meter"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={value}
+      aria-label={`${value}% complete`}
+      title={reason || `${value}% complete`}
+    >
+      <span class="score__bar" aria-hidden="true">
+        <span class="score__fill" style={{ width: `${value}%` }} />
+      </span>
+      <span class="score__text">{value}%</span>
+    </span>
+  )
+}
+
+interface ListAction {
+  kind: ReviewItemKind
+  label: string
+  /** Opens the session with the item's prompt seeded — never sent. */
+  onPick: (prompt: string) => void
+}
+
 function List({
   title,
   items,
   icon,
   empty,
+  action,
 }: {
   title: string
   items: string[]
   icon: string
   empty: string
+  action?: ListAction
 }) {
   return (
     <section class="rlist">
@@ -459,9 +521,22 @@ function List({
         <span class={`codicon codicon-${icon}`} aria-hidden="true" /> {title}
       </h4>
       {items.length ? (
-        <ul class="rlist__items">
+        <ul class={`rlist__items${action ? ' rlist__items--actionable' : ''}`}>
           {items.map((it, i) => (
-            <li key={i}>{it}</li>
+            <li key={i}>
+              <span class="rlist__text">{it}</span>
+              {action ? (
+                <button
+                  class="rlist__act"
+                  type="button"
+                  title={`Open the session with a prompt to ${action.kind === 'blocker' ? 'resolve this blocker' : 'do this step'} — not sent`}
+                  aria-label={`${action.label}: ${it}`}
+                  onClick={() => action.onPick(promptForItem(action.kind, it))}
+                >
+                  <span class="codicon codicon-arrow-right" aria-hidden="true" /> {action.label}
+                </button>
+              ) : null}
+            </li>
           ))}
         </ul>
       ) : (

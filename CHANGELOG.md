@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Review: a **completion score** (0–100 with a one-line reason) per session, shown as a meter on
+  the card, averaged in the modal header, and as a clickable badge on each favorite card; reports
+  written before the score count as out of date so one Analyse brings them up to date.
+- Review: every "Still to do" and "Blocked on" item has its own **Do this** / **Fix this** action
+  that opens the session with a prompt for just that item (seeded, never sent).
+- Open: a prompt is now **always copied to the clipboard**. When the session's panel is already
+  open, Claude Code drops the prompt ("Session is already open…"); Session Deck now detects that
+  case, focuses the composer and says to paste.
 - P6: the `/session-deck` Claude Code skill — `skills/session-deck/` (SKILL.md + a CLI bundled
   from the extension's own modules): list, review [--run], show, star/unstar over the same
   `~/.session-deck` files; `pnpm skill:install` symlinks it into `~/.claude/skills`.

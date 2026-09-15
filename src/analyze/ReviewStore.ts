@@ -1,7 +1,7 @@
 import { readdir, readFile, unlink } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { ChatReview } from '../shared/review'
-import { clampPriority, priorityLabel } from '../shared/review'
+import { clampCompletion, clampPriority, priorityLabel } from '../shared/review'
 import { writeFileAtomic } from '../util/atomicWrite'
 
 /**
@@ -111,6 +111,8 @@ export function parseReviewFile(raw: string): ChatReview | undefined {
     priority,
     priority_label: priorityLabel(priority),
     priority_reason: s('priority_reason'),
+    completion: clampCompletion(r['completion']),
+    completion_reason: s('completion_reason'),
     options,
     model: s('model'),
     analyzed_at: s('analyzed_at'),

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'preact/hooks'
 import type { FavoriteGroup, FavoriteItem } from '../../src/shared/cards'
-import type { DashboardPrefs } from '../../src/shared/messages'
+import type { DashboardPrefs, ReviewState } from '../../src/shared/messages'
 import { post } from '../vscodeApi'
 import { deckFor } from '../tipContent'
 import { EntityCard, MissingCard } from './EntityCard'
@@ -12,8 +12,11 @@ interface Props {
   prefs: DashboardPrefs
   workspaceKeys: string[]
   onAdd: () => void
-  onReview?: (() => void) | undefined
+  /** Opens the Review modal, scrolled to `focus` when given. */
+  onReview?: ((focus: string | null) => void) | undefined
   reviewEnabled: boolean
+  /** Cached reports by session id, for the per-card review badge. */
+  reviews?: ReviewState['reviews'] | undefined
 }
 
 /**
@@ -30,6 +33,7 @@ export function FavoritesSection({
   onAdd,
   onReview,
   reviewEnabled,
+  reviews,
 }: Props) {
   const empty = group.items.length === 0
   const override = prefs.tips[group.entityType]
@@ -62,6 +66,7 @@ export function FavoritesSection({
           variant={prefs.view === 'grid' ? 'tile' : 'row'}
         />
       )
+    const review = reviews?.[item.entityId]
     return (
       <EntityCard
         key={item.id}
@@ -69,6 +74,16 @@ export function FavoritesSection({
         variant={prefs.view === 'grid' ? 'tile' : 'row'}
         verbose={prefs.verbose}
         starred
+        badge={
+          review && onReview
+            ? {
+                text: `${review.completion !== null ? `${review.completion}% · ` : ''}${review.priority_label}${review.stale ? ' · out of date' : ''}`,
+                title: `Review: ${review.summary}`,
+                tone: review.stale ? 'warn' : badgeTone(review.completion),
+                onClick: () => onReview(item.entityId),
+              }
+            : undefined
+        }
         draggable
         dropTarget={overId === item.id}
         onDragStart={(e) => {
@@ -113,7 +128,7 @@ export function FavoritesSection({
               class="button button--primary"
               type="button"
               disabled={!reviewEnabled}
-              onClick={onReview}
+              onClick={() => onReview(null)}
               title={reviewEnabled ? undefined : 'Star a session first'}
             >
               <span class="codicon codicon-checklist" aria-hidden="true" /> Review{' '}
@@ -210,4 +225,9 @@ export function groupByProject(items: FavoriteItem[], workspaceKeys: string[]): 
         (a.latest < b.latest ? 1 : a.latest > b.latest ? -1 : 0)
       )
     })
+}
+
+function badgeTone(completion: number | null): 'low' | 'mid' | 'high' | 'plain' {
+  if (completion === null) return 'plain'
+  return completion >= 90 ? 'high' : completion >= 50 ? 'mid' : 'low'
 }

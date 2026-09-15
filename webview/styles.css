@@ -1054,6 +1054,95 @@ body.vscode-high-contrast-light .modal {
   border-color: currentColor;
 }
 
+/* Review badge on a favorite card: score + priority, opens the Review modal on that session. */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 6px;
+  font: inherit;
+  font-size: 0.85em;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  padding: 0 6px;
+  line-height: 16px;
+  border-radius: 8px;
+  border: 1px solid var(--deck-border);
+  background: transparent;
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.badge:hover,
+.badge:focus-visible {
+  background: var(--vscode-toolbar-hoverBackground, var(--deck-border));
+  outline: none;
+}
+
+.badge .codicon {
+  font-size: 11px;
+}
+
+.badge--low {
+  color: var(--vscode-charts-orange, var(--vscode-foreground));
+}
+
+.badge--mid {
+  color: var(--vscode-charts-yellow, var(--vscode-foreground));
+}
+
+.badge--high {
+  color: var(--vscode-charts-green, var(--vscode-testing-iconPassed, var(--vscode-foreground)));
+}
+
+.badge--warn {
+  color: var(--vscode-editorWarning-foreground, var(--vscode-foreground));
+}
+
+/* Completion score: a meter the width of a short word, plus the number. */
+.score {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8em;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--vscode-descriptionForeground);
+}
+
+.score__bar {
+  display: inline-block;
+  width: 56px;
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--deck-border);
+}
+
+.score__fill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: currentColor;
+}
+
+.score--low {
+  color: var(--vscode-charts-orange, var(--vscode-foreground));
+}
+
+.score--mid {
+  color: var(--vscode-charts-yellow, var(--vscode-foreground));
+}
+
+.score--high {
+  color: var(--vscode-charts-green, var(--vscode-testing-iconPassed, var(--vscode-foreground)));
+}
+
+.score__text {
+  color: var(--vscode-foreground);
+}
+
 .rcard__summary {
   margin: 0;
 }
@@ -1094,6 +1183,48 @@ body.vscode-high-contrast-light .modal {
 
 .rlist__items li + li {
   margin-top: 2px;
+}
+
+/* "Still to do" / "Blocked on" rows: text plus a per-item action that opens
+   the session with a prompt for just that item. */
+.rlist__items--actionable li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.rlist__text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.rlist__act {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font: inherit;
+  font-size: 0.8em;
+  padding: 0 6px;
+  line-height: 18px;
+  border-radius: 9px;
+  border: 1px solid var(--deck-border);
+  background: transparent;
+  color: var(--vscode-textLink-foreground);
+  cursor: pointer;
+  white-space: nowrap;
+  opacity: 0.75;
+}
+
+.rlist__act:hover,
+.rlist__act:focus-visible {
+  opacity: 1;
+  background: var(--vscode-toolbar-hoverBackground, var(--deck-border));
+  outline: none;
+}
+
+.rlist__act .codicon {
+  font-size: 12px;
 }
 
 .rlist__empty {

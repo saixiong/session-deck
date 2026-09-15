@@ -115,6 +115,7 @@ async function cmdList(e: Env, json: boolean): Promise<number> {
           missing: !r.entry || r.entry.missing,
           priority: r.review?.priority ?? null,
           priority_label: r.review?.priority_label ?? null,
+          completion: r.review?.completion ?? null,
           reviewed_at: r.review?.analyzed_at ?? null,
         })),
         null,
@@ -129,7 +130,9 @@ async function cmdList(e: Env, json: boolean): Promise<number> {
   }
   console.log(`Favorites (${rows.length}):`)
   for (const r of rows) {
-    const prio = r.review ? `${r.review.priority} ${r.review.priority_label}` : undefined
+    const prio = r.review
+      ? `${r.review.priority} ${r.review.priority_label}${r.review.completion !== null ? ` · ${r.review.completion}%` : ''}`
+      : undefined
     console.log(line(r.entry, r.label, r.id, prio))
   }
   return 0
@@ -142,6 +145,10 @@ function printReview(r: ReturnType<ReviewStore['get']>, stale: boolean): void {
   )
   console.log(`  ${r.summary}`)
   console.log(`  why: ${r.priority_reason}`)
+  if (r.completion !== null)
+    console.log(
+      `  complete: ${r.completion}%${r.completion_reason ? ` — ${r.completion_reason}` : ''}`
+    )
   if (r.done.length) console.log(`  done:\n${r.done.map((d) => `    - ${d}`).join('\n')}`)
   if (r.next_steps.length)
     console.log(`  still to do:\n${r.next_steps.map((d) => `    - ${d}`).join('\n')}`)

@@ -44,6 +44,8 @@ const GOOD = {
   blockers: [],
   priority: 4,
   priority_reason: 'A PR is waiting.',
+  completion: 70,
+  completion_reason: 'Fix and test are in; not merged.',
   options: [
     {
       id: 'merge',
@@ -64,6 +66,18 @@ describe('schema / parseReview', () => {
   it('prefers structured_output and clamps priority', () => {
     const parsed = parseReview({ ...GOOD, priority: 9 }, undefined)
     expect(parsed.priority).toBe(5)
+    expect(parsed.completion).toBe(70)
+    expect(parsed.completion_reason).toBe('Fix and test are in; not merged.')
+    // Out-of-band or missing scores: clamped, or unknown — never a fake 0.
+    expect(parseReview({ ...GOOD, completion: 140 }, undefined).completion).toBe(100)
+    expect(parseReview({ ...GOOD, completion: '55.6' }, undefined).completion).toBe(56)
+    const legacy: Record<string, unknown> = { ...GOOD }
+    delete legacy['completion']
+    delete legacy['completion_reason']
+    expect(parseReview(legacy, undefined)).toMatchObject({
+      completion: null,
+      completion_reason: '',
+    })
     expect(parsed.options).toHaveLength(2)
   })
 
@@ -113,10 +127,13 @@ describe('schema / parseReview', () => {
     expect(r.error).toBeNull()
     const e = emptyReview(base)
     expect(e.priority).toBe(1)
+    expect(e.completion).toBe(0)
     expect(e.cost_usd).toBe(0)
     expect(e.options).toHaveLength(1)
     expect(SYSTEM_PROMPT).toContain('SESSION header')
+    expect(SYSTEM_PROMPT).toContain('Completion is a percentage')
     expect(REVIEW_SCHEMA.required).toContain('options')
+    expect(REVIEW_SCHEMA.required).toContain('completion')
   })
 })
 
@@ -219,6 +236,9 @@ describe('ReviewStore', () => {
     expect(await store.delete('../../etc/passwd')).toBe(false)
     expect(parseReviewFile('{"conversation_id":"x","error":"e"}')).toBeUndefined()
     expect(parseReviewFile('{"conversation_id":"x","priority":"high"}')?.priority).toBe(3)
+    // Reports written before the score existed load with an unknown score, not 0.
+    expect(parseReviewFile('{"conversation_id":"x","priority":3}')?.completion).toBeNull()
+    expect(parseReviewFile('{"conversation_id":"x","completion":88}')?.completion).toBe(88)
   })
 })
 
@@ -294,6 +314,9 @@ describe('ReviewRunner', () => {
     expect(calls).toHaveLength(3)
     await runner.analyze(['b'], { force: true })
     expect(calls).toHaveLength(4)
+    // A report from before the completion score is out of date too.
+    expect(runner.isStale({ ...store.get('b')!, completion: null }, entries.b)).toBe(true)
+    expect(runner.isStale(store.get('b')!, entries.b)).toBe(false)
   })
 
   it('a failed session is reported inline and never cached; the others complete', async () => {

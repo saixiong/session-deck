@@ -132,6 +132,7 @@ The `ChatReview` shape (D7) plus what only this tool knows:
   "conversation_id": "70e8910b-…", "title": "…",
   "summary": "…", "done": [], "next_steps": [], "blockers": [],
   "priority": 4, "priority_label": "High", "priority_reason": "…",
+  "completion": 70, "completion_reason": "…",             // 0–100 vs the session's own goal; null on pre-score reports
   "options": [{"id": "ship-progress-bar", "label": "…", "description": "…", "prompt": "…"}],
   "model": "claude-sonnet-5", "analyzed_at": "…",
   "fingerprint": "1412:2026-09-14T16:11:50.949Z",     // messageCount:lastMessageAt  (Chat Review D3)
@@ -306,7 +307,9 @@ Full-height modal with a small margin (in-webview overlay; the panel is already 
 
 ### 9.2 Cards
 
-Ordered by priority desc, then `lastActiveAt` desc. **Every starred session appears** (#850): unreviewed ones render a stub card (title, subtitle, preview) with a message and a large **Review this session** button; failed ones render the stub plus the error **inline**, with Retry. A reviewed card shows: summary · Done · Still to do · Blocked on · priority badge + reason · stale badge when the fingerprint moved · footer: model, analyzed_at, cost · **directions as a radio group** with one **Take this direction** button per card → `SessionOpener.open(sessionId, option.prompt)` (D9, seed only) · **Open** (no prompt) · **Remove from favorites** · **Re-analyse**.
+Ordered by priority desc, then `lastActiveAt` desc. **Every starred session appears** (#850): unreviewed ones render a stub card (title, subtitle, preview) with a message and a large **Review this session** button; failed ones render the stub plus the error **inline**, with Retry. A reviewed card shows: summary · Done · Still to do · Blocked on · priority badge + reason · **completion meter** (0–100, reason in the tooltip; the header averages it) · stale badge when the fingerprint moved **or the report predates the score** · footer: model, analyzed_at, cost · **directions as a radio group** with one **Take this direction** button per card → `SessionOpener.open(sessionId, option.prompt)` (D9, seed only) · **Open** (no prompt) · **Remove from favorites** · **Re-analyse**. Each **Still to do** / **Blocked on** item carries a **Do this** / **Fix this** button that opens the session with a templated prompt for that one item (`promptForItem`, D9 seed only). On the dashboard, a favorite with a report shows a `score% · priority` badge that opens the modal focused on it.
+
+**Prompt delivery (§7.4 addendum).** Every prompt is copied to the clipboard before any open path runs. The Claude Code extension cannot seed a composer that is already open — it reveals the panel and shows "Session is already open. Your prompt was not applied — enter it manually." — and exposes no command to set an open composer's text (verified against 2.1.270: `claude-vscode.focus` only delivers the editor selection as an @-mention; VS Code 1.137 has no webview paste command). So `SessionOpener` counts Claude panel tabs (`TabInputWebview.viewType === 'mainThreadWebview-claudeVSCodePanel'`) before and up to 1.5 s after `editor.open`; no new tab ⇒ it runs `claude-vscode.focus` to put the caret in that composer and tells the user to paste.
 
 Directions are alternatives, hence radio not checkboxes (Chat Review D7). Submitting never closes the modal (Chat Review D8 — the user is triaging several).
 

@@ -1,5 +1,5 @@
 import type { ChatReview, ReviewOption } from '../shared/review'
-import { clampPriority, priorityLabel } from '../shared/review'
+import { clampCompletion, clampPriority, priorityLabel } from '../shared/review'
 
 /**
  * What the model is asked for, and how its answer is recovered.
@@ -13,7 +13,17 @@ import { clampPriority, priorityLabel } from '../shared/review'
 export const REVIEW_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['summary', 'done', 'next_steps', 'blockers', 'priority', 'priority_reason', 'options'],
+  required: [
+    'summary',
+    'done',
+    'next_steps',
+    'blockers',
+    'priority',
+    'priority_reason',
+    'completion',
+    'completion_reason',
+    'options',
+  ],
   properties: {
     summary: { type: 'string' },
     done: { type: 'array', items: { type: 'string' } },
@@ -21,6 +31,8 @@ export const REVIEW_SCHEMA = {
     blockers: { type: 'array', items: { type: 'string' } },
     priority: { type: 'integer', minimum: 1, maximum: 5 },
     priority_reason: { type: 'string' },
+    completion: { type: 'integer', minimum: 0, maximum: 100 },
+    completion_reason: { type: 'string' },
     options: {
       type: 'array',
       minItems: 1,
@@ -54,6 +66,8 @@ Reply with a single JSON object and nothing else. No prose, no code fence.
   "blockers": ["Anything stopping progress: an unanswered question, a failing test, a missing decision. Empty list if none."],
   "priority": 1-5,
   "priority_reason": "One sentence on why it sits at that level.",
+  "completion": 0-100,
+  "completion_reason": "One sentence on what the score is measured against and what is missing.",
   "options": [
     {
       "id": "short-kebab-id",
@@ -70,6 +84,14 @@ Priority means how much this work needs attention now:
   3 Medium    real work, no urgency.
   2 Low       nice to have, or nearly finished.
   1 Idle      finished, abandoned, or trivial.
+
+Completion is a percentage of the goal the user set in this conversation, \
+judged against the transcript, not against the length of the lists:
+  0    nothing done toward it yet.
+  50   the core work is half there, or done but unverified.
+  90   done and verified; only cleanup, docs or a decision remain.
+  100  done, verified, and nothing is left to do — say so in the summary.
+Abandoned or trivial work still gets an honest number, not 100.
 
 Rules:
 - Judge only from the transcript. Never invent progress that is not shown.
@@ -88,6 +110,8 @@ export interface ParsedReview {
   blockers: string[]
   priority: number
   priority_reason: string
+  completion: number | null
+  completion_reason: string
   options: ReviewOption[]
 }
 
@@ -109,6 +133,8 @@ export function parseReview(structured: unknown, resultText: string | undefined)
     blockers: strList(obj['blockers']),
     priority: clampPriority(obj['priority']),
     priority_reason: str(obj['priority_reason']),
+    completion: clampCompletion(obj['completion']),
+    completion_reason: str(obj['completion_reason']),
     options,
   }
 }
@@ -146,6 +172,8 @@ export function emptyReview(base: Parameters<typeof makeReview>[0], now = new Da
       blockers: [],
       priority: 1,
       priority_reason: 'Nothing has happened in it.',
+      completion: 0,
+      completion_reason: 'No work has been asked for or done.',
       options: [
         {
           id: 'start',

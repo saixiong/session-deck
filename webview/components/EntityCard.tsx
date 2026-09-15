@@ -18,6 +18,8 @@ export interface EntityCardProps {
   quiet?: boolean
   /** Extra actions rendered in the action row (Remove, etc.). */
   actions?: ComponentChildren
+  /** A small clickable chip under the title — the review score on favorites. */
+  badge?: CardBadge | undefined
   draggable?: boolean
   onDragStart?: (e: DragEvent) => void
   onDragOver?: (e: DragEvent) => void
@@ -26,8 +28,15 @@ export interface EntityCardProps {
   dropTarget?: boolean
 }
 
+export interface CardBadge {
+  text: string
+  title: string
+  tone: 'low' | 'mid' | 'high' | 'warn' | 'plain'
+  onClick: () => void
+}
+
 export function EntityCard(props: EntityCardProps) {
-  const { card, variant, verbose, starred, quiet, actions } = props
+  const { card, variant, verbose, starred, quiet, actions, badge } = props
   const open = (target?: 'window' | 'terminal') =>
     post({
       type: 'open',
@@ -91,6 +100,16 @@ export function EntityCard(props: EntityCardProps) {
         {card.subtitle ? <span>{card.subtitle}</span> : null}
         {card.subtitle && relative ? <span aria-hidden="true"> · </span> : null}
         {relative ? <span title={card.updatedAt ?? undefined}>{relative}</span> : null}
+        {badge ? (
+          <button
+            class={`badge badge--${badge.tone}`}
+            type="button"
+            title={badge.title}
+            onClick={badge.onClick}
+          >
+            <span class="codicon codicon-checklist" aria-hidden="true" /> {badge.text}
+          </button>
+        ) : null}
       </div>
       {verbose && card.preview ? (
         <p class={`card__preview${variant === 'tile' || quiet ? ' card__preview--clamp' : ''}`}>

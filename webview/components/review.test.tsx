@@ -51,6 +51,8 @@ const review = (
   priority,
   priority_label: 'x',
   priority_reason: `because ${id}`,
+  completion: 60,
+  completion_reason: `sixty because ${id}`,
   options: [
     { id: 'one', label: 'Option one', description: 'first', prompt: `PROMPT ONE ${id}` },
     { id: 'two', label: 'Option two', description: 'second', prompt: `PROMPT TWO ${id}` },
@@ -105,6 +107,7 @@ describe('ReviewModal', () => {
     expect(status).toContain('4 starred')
     expect(status).toContain('2 reviewed')
     expect(status).toContain('1 unreviewed')
+    expect(status).toContain('60% complete on average')
     // Analyse covers the unreviewed one only (fresh reviews are not pending; the missing one cannot run).
     expect(screen.getByText(/Analyse 1 session/)).toBeTruthy()
     expect(screen.getByText(/no longer on disk/)).toBeTruthy()
@@ -136,6 +139,61 @@ describe('ReviewModal', () => {
     })
     fireEvent.click(screen.getByText('Re-analyse'))
     expect(posted[2]).toEqual({ type: 'reviewAnalyze', ids: ['a'], force: true })
+  })
+
+  it('shows the completion score as a meter, and hides it on reports that predate it', () => {
+    render(
+      <ReviewModal
+        group={group([item('a', 'A'), item('b', 'B')])}
+        review={state({
+          reviews: {
+            a: review('a', 4, { completion: 92, completion_reason: 'verified, docs left' }),
+            b: review('b', 3, { completion: null, completion_reason: '' }),
+          },
+        })}
+        focus={null}
+        onClose={() => undefined}
+      />
+    )
+    const meters = screen.getAllByRole('meter')
+    expect(meters).toHaveLength(1)
+    expect(meters[0]!.getAttribute('aria-valuenow')).toBe('92')
+    expect(meters[0]!.getAttribute('title')).toBe('verified, docs left')
+    expect(meters[0]!.className).toContain('score--high')
+    expect(document.querySelector('.review__status')!.textContent).toContain('92% complete')
+  })
+
+  it('each "Still to do" and "Blocked on" item opens the session with a prompt for just that item', () => {
+    render(
+      <ReviewModal
+        group={group([item('a', 'A')])}
+        review={state({
+          reviews: {
+            a: review('a', 4, {
+              next_steps: ['Merge PR #42', 'Update the changelog'],
+              blockers: ['CI is red on main'],
+            }),
+          },
+        })}
+        focus={null}
+        onClose={() => undefined}
+      />
+    )
+    const doThis = screen.getAllByRole('button', { name: /^Do this:/ })
+    expect(doThis.map((b) => b.getAttribute('aria-label'))).toEqual([
+      'Do this: Merge PR #42',
+      'Do this: Update the changelog',
+    ])
+    fireEvent.click(doThis[1]!)
+    fireEvent.click(screen.getByRole('button', { name: 'Fix this: CI is red on main' }))
+    expect(posted).toHaveLength(2)
+    expect(posted[0]).toMatchObject({ type: 'open', entityId: 'a' })
+    expect((posted[0] as { prompt: string }).prompt).toContain('next step: Update the changelog')
+    expect((posted[1] as { prompt: string }).prompt).toContain(
+      'blocker before anything else: CI is red on main'
+    )
+    // "Done" items are not actionable.
+    expect(screen.queryByRole('button', { name: /did a thing/ })).toBeNull()
   })
 
   it('Analyse sends the pending ids; the unreviewed card sends its own id forced', () => {

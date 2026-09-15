@@ -16,9 +16,13 @@ Session Deck is an independent project and is not affiliated with Anthropic.
 - **Sidebar** — Favorites → Live now → Recent, every row with a star. `Favorite Current Session`
   stars the one running in this window.
 - **Review** — one button reads each starred session's recent transcript and reports a summary,
-  what is done, what is still to do, what it is blocked on, a priority (1–5), and two to four
-  directions. Choosing one opens the session with that prompt **typed into the composer, never
-  sent**. Reports are cached until the session moves on.
+  what is done, what is still to do, what it is blocked on, a priority (1–5), a **completion
+  score** (0–100, judged against the session's own goal), and two to four directions. Choosing a
+  direction — or the **Do this** / **Fix this** button on any single to-do or blocker — opens the
+  session with that prompt **typed into the composer, never sent**. The prompt is also copied to
+  the clipboard every time: when the session's tab is already open, Claude Code cannot seed its
+  composer, so Session Deck focuses it and you press ⌘V. Reports are cached until the session
+  moves on; the score also shows as a badge on each favorite card.
 
 ![Review](media/screenshot-review.png)
 

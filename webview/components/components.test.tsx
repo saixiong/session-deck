@@ -138,6 +138,25 @@ describe('EntityCard', () => {
     expect(screen.getByLabelText('Remove from favorites').getAttribute('aria-pressed')).toBe('true')
   })
 
+  it('renders the review badge when given, and it calls back instead of opening the session', () => {
+    const onClick = vi.fn()
+    render(
+      <EntityCard
+        card={card('a')}
+        variant="tile"
+        verbose={false}
+        starred
+        badge={{ text: '60% · High', title: 'Review: summary', tone: 'mid', onClick }}
+      />
+    )
+    const badge = screen.getByTitle('Review: summary')
+    expect(badge.textContent).toContain('60% · High')
+    expect(badge.className).toContain('badge--mid')
+    fireEvent.click(badge)
+    expect(onClick).toHaveBeenCalledTimes(1)
+    expect(posted).toEqual([])
+  })
+
   it('a missing card shows the label snapshot and removes by favorite id', () => {
     render(<MissingCard label="Old label" id="fav_1" variant="tile" />)
     expect(screen.getByText('Old label')).toBeTruthy()

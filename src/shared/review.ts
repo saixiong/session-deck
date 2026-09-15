@@ -33,6 +33,12 @@ export interface ChatReview {
   priority: number
   priority_label: string
   priority_reason: string
+  /**
+   * 0–100: how much of what the session set out to do is done and verified.
+   * `null` on reports written before the score existed; never guessed.
+   */
+  completion: number | null
+  completion_reason: string
   options: ReviewOption[]
   model: string
   analyzed_at: string
@@ -70,4 +76,26 @@ export function clampPriority(value: unknown): number {
 
 export function priorityLabel(priority: number): string {
   return PRIORITY_LABELS[priority] ?? PRIORITY_LABELS[DEFAULT_PRIORITY]!
+}
+
+/** 0–100 from whatever the model or an old file supplied; anything unusable is "unknown", not 0. */
+export function clampCompletion(value: unknown): number | null {
+  const n =
+    typeof value === 'number' ? value : typeof value === 'string' ? Number.parseFloat(value) : NaN
+  if (!Number.isFinite(n)) return null
+  return Math.max(0, Math.min(100, Math.round(n)))
+}
+
+export type ReviewItemKind = 'next_step' | 'blocker'
+
+/**
+ * The prompt seeded when the user picks one "Still to do" or "Blocked on"
+ * item to act on. A template rather than a model-written prompt: it costs
+ * nothing, and the item text is the model's own wording of the work.
+ */
+export function promptForItem(kind: ReviewItemKind, text: string): string {
+  const item = text.trim()
+  return kind === 'blocker'
+    ? `Resolve this blocker before anything else: ${item}\n\nIf it needs a decision from me, ask; otherwise fix it and report what changed.`
+    : `Pick up where we left off and do this next step: ${item}\n\nWhen it is done, summarise what changed and what remains.`
 }

@@ -143,9 +143,10 @@ export function App() {
           workspaceKeys={state.workspaceKeys}
           onAdd={() => setPicker({ entityType: group.entityType, label: group.label })}
           onReview={
-            group.entityType === 'session' ? () => setReviewOpen({ focus: null }) : undefined
+            group.entityType === 'session' ? (focus) => setReviewOpen({ focus }) : undefined
           }
           reviewEnabled={group.items.length > 0 || state.review.extraIds.length > 0}
+          reviews={group.entityType === 'session' ? state.review.reviews : undefined}
         />
       ))}
 

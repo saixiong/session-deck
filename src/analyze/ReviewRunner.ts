@@ -57,8 +57,18 @@ export class ReviewRunner {
   }
 
   /** A cached review is stale once the transcript has moved (Chat Review D3). */
+  /**
+   * Out of date when the transcript moved on — or when the report predates
+   * the completion score, so one Analyse click brings old reports up to the
+   * current shape instead of leaving them half-rendered forever.
+   */
   isStale(review: ChatReview, entry: SessionIndexEntry | undefined): boolean {
-    return !entry || entry.missing || fingerprintOf(entry) !== review.fingerprint
+    return (
+      !entry ||
+      entry.missing ||
+      fingerprintOf(entry) !== review.fingerprint ||
+      review.completion === null
+    )
   }
 
   /**
