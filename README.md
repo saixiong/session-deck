@@ -24,7 +24,39 @@ Session Deck is an independent project and is not affiliated with Anthropic.
   composer, so Session Deck focuses it and you press ⌘V. Reports are cached until the session
   moves on; the score also shows as a badge on each favorite card.
 
+- **Board** — the `Board` switch in the header flattens every outstanding to-do and blocker from
+  every starred session into one list, each tagged by what kind of work it is: **mechanical** (one
+  obvious way to do it), **decision** (a human choice that changes what gets built), **yours**
+  (only you can do it), or **needs triage** (the classification did not survive). Filter by kind,
+  tick items off, and select any number — across sessions — to seed them back into their own
+  sessions, one click per session, still typed and never sent. `session-deck board` prints the same
+  queue in the terminal.
+
+  The tags come from the review that already ran, so they cost no extra model call — and they are a
+  model's judgment, not a permission system. Nothing on the Board acts on its own: there are no
+  timers and no background runs, and an item is only ever shown to you or seeded into a composer
+  you then read. What you tick off lives in `~/.session-deck/board.json`, keyed by the item's text,
+  so it survives a re-analysis that did not reword it; an item that comes back reworded honestly
+  reappears as new work rather than inheriting a state it never earned.
+
 ![Review](media/screenshot-review.png)
+
+### When a report goes out of date
+
+A report is stored with a fingerprint of the session it described — its message count and last
+activity. Every time the dashboard rebuilds its state (you open it, a rescan finishes, a batch
+ends, you star or unstar something) each cached report is compared against the session as the
+index currently sees it, and it is marked **out of date** when:
+
+- the session has moved on — more messages, or activity after the report was written,
+- its transcript is gone from `~/.claude/projects`,
+- or the report predates a field the current version reports (the completion score, say), so one
+  analysis brings it up to date.
+
+Nothing re-analyses itself. Out of date only changes the badge and adds the session to what
+**Analyse N sessions** would cover; the model call happens when you ask for it. The same rule
+drives the CLI: `session-deck review --run` skips fresh reports and re-runs stale ones unless you
+pass `--force`.
 
 ## How it works, and what it costs
 
@@ -50,7 +82,7 @@ opens in the Claude Code panel; one from another repository opens a new window o
 
 | Setting                        | Default              | Purpose                                               |
 | ------------------------------ | -------------------- | ----------------------------------------------------- |
-| `sessionDeck.dataDir`          | `~/.session-deck`    | favorites + cached reviews                            |
+| `sessionDeck.dataDir`          | `~/.session-deck`    | favorites + cached reviews + board state              |
 | `sessionDeck.claudeProjectsDir`| `~/.claude/projects` | read-only source; override for `CLAUDE_CONFIG_DIR`    |
 | `sessionDeck.claudePath`       | auto                 | `claude` CLI for reviews (bundled → PATH → ~/.local)  |
 | `sessionDeck.model`            | `sonnet`             | model alias for reviews                               |
@@ -59,6 +91,7 @@ opens in the Claude Code panel; one from another repository opens a new window o
 | `sessionDeck.showSdkSessions`  | `false`              | list `sdk-cli` sessions                               |
 | `sessionDeck.openTarget`       | `panel`              | `panel` \| `window` \| `terminal`                     |
 | `sessionDeck.openInFocusView`  | `false`              | toggle Claude Code's Focus view after opening         |
+| `sessionDeck.openDashboardWithSidebar` | `true`       | open the dashboard tab when the sidebar is opened     |
 | `sessionDeck.indexLargeFilesMB`| `512`                | larger transcripts are indexed head+tail only         |
 
 ## Develop

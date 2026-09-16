@@ -2,6 +2,17 @@ import { mkdir } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { runClaude } from '../analyze/ClaudeCli'
+import { BoardStore } from '../store/BoardStore'
+import {
+  BOARD_KINDS,
+  compareBoardSessions,
+  isBoardItemKind,
+  itemsOf,
+  KIND_LABELS,
+  orderItems,
+  promptForItems,
+} from '../shared/board'
+import { promptForItem } from '../shared/review'
 import { ReviewRunner } from '../analyze/ReviewRunner'
 import { ReviewStore } from '../analyze/ReviewStore'
 import { buildTranscript } from '../analyze/transcript'
@@ -24,6 +35,7 @@ import { findClaudeCli } from './findClaude'
  *   session-deck review [<id>|all] [--run] [--force] [--model <alias>] [--json]
  *   session-deck star <id> | unstar <id>
  *   session-deck show <id>            one cached report in full
+ *   session-deck board [--kind <k>] [--all] [--json] [--prompt <session-id>]
  */
 interface Env {
   dataDir: string
@@ -66,6 +78,12 @@ async function openIndex(e: Env): Promise<SessionIndexer> {
 
 async function openFavorites(e: Env): Promise<FavoritesStore> {
   const store = new FavoritesStore(join(e.dataDir, 'favorites.json'))
+  await store.load()
+  return store
+}
+
+async function openBoard(e: Env): Promise<BoardStore> {
+  const store = new BoardStore(join(e.dataDir, 'board.json'))
   await store.load()
   return store
 }
@@ -262,6 +280,138 @@ async function cmdReview(e: Env, args: string[]): Promise<number> {
   return exit
 }
 
+/**
+ * The Board in the terminal (SPEC_BOARD B7/B8): the same rows the dashboard
+ * shows, from the same files. Read-only apart from `--prompt`, which composes
+ * the seed prompt for a session's open items so the skill can hand it over.
+ */
+async function cmdBoard(e: Env, args: string[]): Promise<number> {
+  const json = flag(args, '--json')
+  const all = flag(args, '--all')
+  const promptFor = option(args, '--prompt')
+  const kind = option(args, '--kind')
+  // An unrecognised kind silently matched nothing, which reads exactly like
+  // "you have no mechanical work left" — the most misleading answer available.
+  if (kind !== undefined && !isBoardItemKind(kind)) {
+    console.error(`Unknown kind "${kind}". Use one of: ${BOARD_KINDS.join(', ')}.`)
+    return 2
+  }
+  const [favorites, reviews, board, indexer] = await Promise.all([
+    openFavorites(e),
+    openReviews(e),
+    openBoard(e),
+    openIndex(e),
+  ])
+  // Sessions in board order first, then their items — the same two rules the
+  // dashboard applies, from the same shared module, so the skill and the panel
+  // never disagree about what is at the top (B7).
+  const rows = favorites
+    .listByType('session')
+    .flatMap((f) => {
+      const review = reviews.get(f.entity_id)
+      if (!review) return []
+      const entry = indexer.get(f.entity_id)
+      return [
+        {
+          sessionId: f.entity_id,
+          title: entry && !entry.missing ? resolveTitle(entry) : f.label,
+          priority: review.priority,
+          lastActiveAt: entry?.lastActiveAt ?? '',
+          review,
+        },
+      ]
+    })
+    .sort(compareBoardSessions)
+    .flatMap((s) =>
+      orderItems(itemsOf(s.review)).map((item) => ({
+        sessionId: s.sessionId,
+        title: s.title,
+        priority: s.priority,
+        item,
+        state: board.get(s.sessionId, item.id)?.state ?? null,
+      }))
+    )
+    .filter(
+      (r) => (all || r.state === null || r.state === 'seeded') && (!kind || r.item.kind === kind)
+    )
+  await indexer.dispose()
+  board.dispose()
+
+  if (promptFor) {
+    // A prefix that matches two sessions used to compose one prompt out of
+    // both of their items and hand it to whichever sorted first. Refuse
+    // instead: seeding the wrong session is not a recoverable mistake.
+    const ids = [...new Set(rows.map((r) => r.sessionId))]
+    const exact = ids.filter((id) => id === promptFor)
+    const matches = exact.length ? exact : ids.filter((id) => id.startsWith(promptFor))
+    if (matches.length === 0) {
+      console.error(`No open board items for ${promptFor}.`)
+      return 1
+    }
+    if (matches.length > 1) {
+      console.error(
+        `"${promptFor}" matches ${matches.length} sessions (${matches
+          .map((id) => id.slice(0, 8))
+          .join(', ')}). Give more of the id.`
+      )
+      return 2
+    }
+    const mine = rows.filter((r) => r.sessionId === matches[0])
+    const texts = mine.map((r) => r.item.text)
+    console.log(texts.length === 1 ? promptForItem('next_step', texts[0]!) : promptForItems(texts))
+    // The dashboard composes a prompt out of rows you ticked; --prompt takes
+    // whatever is open, which can include the things the classification says
+    // are yours. The prompt's own closing paragraph asks the agent to stop at
+    // a forking decision, but that is the agent's judgment — say plainly, on
+    // stderr so a redirected prompt stays clean, which items were yours.
+    const yours = mine.filter((r) => r.item.kind === 'decision' || r.item.kind === 'user_action')
+    if (yours.length) {
+      console.error(
+        `\nNote: ${yours.length} of these ${yours.length === 1 ? 'is' : 'are'} yours, not an agent's:`
+      )
+      for (const r of yours) console.error(`  - ${r.item.text}  (${KIND_LABELS[r.item.kind]})`)
+      console.error('Add --kind mechanical to leave them out.')
+    }
+    return 0
+  }
+  if (json) {
+    console.log(
+      JSON.stringify(
+        rows.map((r) => ({
+          session_id: r.sessionId,
+          title: r.title,
+          item_id: r.item.id,
+          text: r.item.text,
+          kind: r.item.kind,
+          source: r.item.source,
+          effort: r.item.effort,
+          state: r.state,
+        })),
+        null,
+        2
+      )
+    )
+    return 0
+  }
+  if (rows.length === 0) {
+    console.log('Nothing outstanding. Review a starred session to fill the board.')
+    return 0
+  }
+  let current = ''
+  console.log(`Board (${rows.length} item${rows.length === 1 ? '' : 's'}):`)
+  for (const r of rows) {
+    if (r.title !== current) {
+      current = r.title
+      console.log(`\n  ${current}  [${r.sessionId.slice(0, 8)}]`)
+    }
+    const tags = [KIND_LABELS[r.item.kind], r.item.source === 'blocker' ? 'blocked' : '', r.state]
+      .filter(Boolean)
+      .join(' · ')
+    console.log(`    - ${r.item.text}  (${tags})`)
+  }
+  return 0
+}
+
 async function cmdStar(e: Env, id: string | undefined, on: boolean): Promise<number> {
   if (!id) {
     console.error('usage: session-deck star|unstar <session-id>')
@@ -320,6 +470,8 @@ export async function main(argv: string[]): Promise<number> {
       return cmdStar(e, args[0], false)
     case 'show':
       return cmdShow(e, args[0], flag(args, '--json'))
+    case 'board':
+      return cmdBoard(e, args)
     case undefined:
     default:
       console.log(
@@ -329,6 +481,8 @@ export async function main(argv: string[]): Promise<number> {
           '  session-deck list [--json]',
           '  session-deck review [<id>|all] [--run] [--force] [--model <alias>] [--json]',
           '  session-deck show <id> [--json]',
+          '  session-deck board [--kind mechanical|decision|user_action] [--all] [--json]',
+          "  session-deck board --prompt <id>   the seed prompt for that session's open items",
           '  session-deck star <id> | unstar <id>',
           '',
           `  data: ${e.dataDir}   transcripts: ${e.projectsDir}   home: ${homedir()}`,

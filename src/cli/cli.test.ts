@@ -3,6 +3,9 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ReviewStore } from '../analyze/ReviewStore'
+import { itemIdOf, reconcileItems } from '../shared/board'
+import type { ChatReview } from '../shared/review'
+import { BoardStore } from '../store/BoardStore'
 import { FavoritesStore } from '../store/FavoritesStore'
 import { main } from './main'
 
@@ -93,5 +96,183 @@ describe('session-deck CLI', () => {
     } finally {
       delete process.env['FAKE_CLAUDE_FAIL']
     }
+  })
+})
+
+const B = '22222222-2222-4222-8222-222222222222'
+
+/** A cached report, written straight to the store — cmdBoard only ever reads them. */
+async function seedReview(
+  sessionId: string,
+  priority: number,
+  nextSteps: string[],
+  blockers: string[] = []
+): Promise<void> {
+  const store = new ReviewStore(join(dataDir, 'reviews'))
+  await store.load()
+  const review: ChatReview = {
+    conversation_id: sessionId,
+    title: `Session ${sessionId.slice(0, 4)}`,
+    summary: 'seeded',
+    done: [],
+    next_steps: nextSteps,
+    blockers,
+    priority,
+    priority_label: 'High',
+    priority_reason: 'seeded',
+    completion: 50,
+    completion_reason: 'seeded',
+    items: reconcileItems(
+      nextSteps,
+      blockers,
+      [...nextSteps, ...blockers].map((text) => ({ text, kind: 'mechanical' as const }))
+    ),
+    options: [{ id: 'o', label: 'Go', description: 'd', prompt: 'p' }],
+    model: 'haiku',
+    analyzed_at: new Date().toISOString(),
+    fingerprint: 'seeded',
+    message_count: 1,
+    cost_usd: 0,
+    duration_ms: 0,
+    error: null,
+  }
+  await store.set(review)
+}
+
+/** Like seedReview, but with a chosen kind per item. */
+async function seedReviewKinds(
+  sessionId: string,
+  entries: Array<[string, 'mechanical' | 'decision' | 'user_action']>
+): Promise<void> {
+  const store = new ReviewStore(join(dataDir, 'reviews'))
+  await store.load()
+  const texts = entries.map(([text]) => text)
+  await store.set({
+    conversation_id: sessionId,
+    title: sessionId,
+    summary: 'seeded',
+    done: [],
+    next_steps: texts,
+    blockers: [],
+    priority: 3,
+    priority_label: 'Medium',
+    priority_reason: 'seeded',
+    completion: 50,
+    completion_reason: 'seeded',
+    items: reconcileItems(
+      texts,
+      [],
+      entries.map(([text, kind]) => ({ text, kind }))
+    ),
+    options: [{ id: 'o', label: 'Go', description: 'd', prompt: 'p' }],
+    model: 'haiku',
+    analyzed_at: new Date().toISOString(),
+    fingerprint: 'seeded',
+    message_count: 1,
+    cost_usd: 0,
+    duration_ms: 0,
+    error: null,
+  })
+}
+
+interface BoardJsonRow {
+  session_id: string
+  text: string
+  kind: string
+  source: string
+  state: string | null
+}
+
+describe('session-deck board', () => {
+  const boardJson = () => JSON.parse(out.at(-1)!) as BoardJsonRow[]
+
+  it('says the board is empty rather than printing nothing', async () => {
+    expect(await main(['board'])).toBe(0)
+    expect(out.at(-1)).toMatch(/Nothing outstanding/)
+  })
+
+  it('prints the dashboard s order: priority first, then blockers before next steps', async () => {
+    await main(['star', A])
+    await main(['star', B])
+    await seedReview(A, 2, ['Low priority step'])
+    await seedReview(B, 5, ['Urgent step'], ['Urgent blocker'])
+    expect(await main(['board', '--json'])).toBe(0)
+    expect(boardJson().map((r) => [r.session_id === B ? 'B' : 'A', r.text])).toEqual([
+      ['B', 'Urgent blocker'],
+      ['B', 'Urgent step'],
+      ['A', 'Low priority step'],
+    ])
+  })
+
+  it('filters by kind and refuses a kind that is not one', async () => {
+    await main(['star', A])
+    await seedReview(A, 3, ['Merge the PR'])
+    expect(await main(['board', '--kind', 'mechanical', '--json'])).toBe(0)
+    expect(boardJson()).toHaveLength(1)
+    expect(await main(['board', '--kind', 'decision', '--json'])).toBe(0)
+    expect(boardJson()).toHaveLength(0)
+    // A typo must not read as "you have no mechanical work left".
+    expect(await main(['board', '--kind', 'mechnical'])).toBe(2)
+    expect(err.join('\n')).toMatch(/Unknown kind "mechnical"/)
+    expect(err.join('\n')).toMatch(/mechanical, decision, user_action, unclassified/)
+  })
+
+  it('hides done items until --all, sharing board.json with the extension store', async () => {
+    await main(['star', A])
+    await seedReview(A, 3, ['Merge the PR', 'Update the changelog'])
+    expect(await main(['board', '--json'])).toBe(0)
+    const [first] = boardJson()
+    const store = new BoardStore(join(dataDir, 'board.json'))
+    await store.load()
+    await store.setState(A, { id: itemIdOf(first!.text), text: first!.text }, 'done')
+    expect(await main(['board', '--json'])).toBe(0)
+    expect(boardJson().map((r) => r.text)).toEqual(['Update the changelog'])
+    expect(await main(['board', '--all', '--json'])).toBe(0)
+    expect(boardJson().map((r) => r.state)).toEqual(['done', null])
+  })
+
+  it('--prompt composes one session s open items, and refuses an ambiguous id', async () => {
+    const favorites = new FavoritesStore(join(dataDir, 'favorites.json'))
+    await favorites.load()
+    await favorites.add({ entityType: 'session', entityId: 'shared-one', label: 'One' })
+    await favorites.add({ entityType: 'session', entityId: 'shared-two', label: 'Two' })
+    await seedReview('shared-one', 3, ['Merge the PR', 'Update the changelog'])
+    await seedReview('shared-two', 3, ['Something else'])
+
+    expect(await main(['board', '--prompt', 'shared-one'])).toBe(0)
+    const prompt = out.at(-1)!
+    expect(prompt).toContain('1. Merge the PR')
+    expect(prompt).toContain('2. Update the changelog')
+    expect(prompt).not.toContain('Something else')
+
+    // The prefix matches both sessions: seeding the wrong one is not recoverable.
+    expect(await main(['board', '--prompt', 'shared-'])).toBe(2)
+    expect(err.join('\n')).toMatch(/matches 2 sessions/)
+    expect(await main(['board', '--prompt', 'nothing-like-this'])).toBe(1)
+  })
+
+  it('--prompt names the items that are the user s, and --kind can leave them out', async () => {
+    const favorites = new FavoritesStore(join(dataDir, 'favorites.json'))
+    await favorites.load()
+    await favorites.add({ entityType: 'session', entityId: 'mixed', label: 'Mixed' })
+    await seedReviewKinds('mixed', [
+      ['Merge the PR', 'mechanical'],
+      ['Decide whether to cut 0.4.0', 'decision'],
+      ['Push your own commits', 'user_action'],
+    ])
+
+    expect(await main(['board', '--prompt', 'mixed'])).toBe(0)
+    expect(out.at(-1)).toContain('Decide whether to cut 0.4.0')
+    const notes = err.join('\n')
+    expect(notes).toMatch(/2 of these are yours/)
+    expect(notes).toContain('Decide whether to cut 0.4.0  (Decision)')
+    expect(notes).toContain('Push your own commits  (Yours)')
+
+    // Asked for only the mechanical work, there is nothing to warn about.
+    err = []
+    expect(await main(['board', '--prompt', 'mixed', '--kind', 'mechanical'])).toBe(0)
+    expect(out.at(-1)).toContain('Merge the PR')
+    expect(out.at(-1)).not.toContain('Decide whether')
+    expect(err.join('\n')).not.toMatch(/yours/)
   })
 })

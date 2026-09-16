@@ -1,3 +1,5 @@
+import type { ReviewItem } from './board'
+
 /**
  * The review report shape (spec §4.2, D7): identical to Snippbot's
  * `ChatReview`, so reports from the two tools are interchangeable. Shared by
@@ -39,6 +41,11 @@ export interface ChatReview {
    */
   completion: number | null
   completion_reason: string
+  /**
+   * Classification of every next_step and blocker (SPEC_BOARD B2). Additive:
+   * reports written before the Board carry none and load as unclassified.
+   */
+  items: ReviewItem[]
   options: ReviewOption[]
   model: string
   analyzed_at: string

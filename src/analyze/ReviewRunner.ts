@@ -58,17 +58,26 @@ export class ReviewRunner {
 
   /** A cached review is stale once the transcript has moved (Chat Review D3). */
   /**
-   * Out of date when the transcript moved on — or when the report predates
-   * the completion score, so one Analyse click brings old reports up to the
-   * current shape instead of leaving them half-rendered forever.
+   * Out of date when the transcript moved on — or when the report predates a
+   * field this version reports (the completion score, the Board's item
+   * classification), so one Analyse click brings old reports up to the current
+   * shape instead of leaving them half-rendered forever (B9).
    */
   isStale(review: ChatReview, entry: SessionIndexEntry | undefined): boolean {
     return (
       !entry ||
       entry.missing ||
       fingerprintOf(entry) !== review.fingerprint ||
-      review.completion === null
+      review.completion === null ||
+      this.unclassified(review)
     )
+  }
+
+  /** A report carrying outstanding work but no usable classification (B9). */
+  private unclassified(review: ChatReview): boolean {
+    const work = review.next_steps.length + review.blockers.length
+    if (work === 0) return false
+    return !review.items.length || review.items.every((i) => i.kind === 'unclassified')
   }
 
   /**

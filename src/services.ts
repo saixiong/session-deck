@@ -17,6 +17,7 @@ import type { SessionIndexer } from './index/SessionIndexer'
 import { SessionOpener } from './open/SessionOpener'
 import { SessionResolver } from './registry/sessionResolver'
 import { ResolverRegistry } from './registry/types'
+import { BoardStore } from './store/BoardStore'
 import { FavoritesStore } from './store/FavoritesStore'
 import { resolveClaudeCli } from './util/claudeCli'
 import { expandHome } from './util/paths'
@@ -33,6 +34,7 @@ const LIVE_TTL_MS = 5_000
 export class Services implements vscode.Disposable {
   readonly output: vscode.OutputChannel
   readonly favorites: FavoritesStore
+  readonly board: BoardStore
   readonly registry = new ResolverRegistry()
   readonly sessions: SessionResolver
   readonly opener: SessionOpener
@@ -62,16 +64,24 @@ export class Services implements vscode.Disposable {
     )
     this.favorites = new FavoritesStore(join(dataDir, 'favorites.json'))
     this.favorites.onDidChange(() => this.favoritesEmitter.fire())
+    // The board shares the favorites signal: both change what the dashboard
+    // must redraw, and the panel rebuilds its whole state either way.
+    this.board = new BoardStore(join(dataDir, 'board.json'))
+    this.board.onDidChange(() => this.favoritesEmitter.fire())
     this.reviews = new ReviewStore(join(dataDir, 'reviews'))
     this.favoritesReady = Promise.all([
       this.favorites.load().then(
         () => this.favorites.watch(),
         (err: unknown) => this.output.appendLine(`[favorites] load failed: ${String(err)}`)
       ),
+      this.board.load().then(
+        () => this.board.watch(),
+        (err: unknown) => this.output.appendLine(`[board] load failed: ${String(err)}`)
+      ),
       this.reviews
         .load()
         .catch((err: unknown) => this.output.appendLine(`[reviews] load failed: ${String(err)}`)),
-    ]).then(() => undefined)
+    ]).then(() => this.pruneBoard())
 
     // The runner reads settings per call so a model change applies to the next batch.
     const config = () => vscode.workspace.getConfiguration('sessionDeck')
@@ -180,10 +190,29 @@ export class Services implements vscode.Disposable {
     this.indexEmitter.fire([])
   }
 
+  /**
+   * `board.json` is pruned once both stores are loaded (B3.2): `seeded` rows
+   * whose session nobody stars any more expire after 30 days, so a file that
+   * only ever grows is not the price of using the Board. `done` and
+   * `dismissed` are decisions and are kept regardless of staleness.
+   *
+   * Never fatal — a board that could not be pruned is still a usable board.
+   */
+  private async pruneBoard(): Promise<void> {
+    try {
+      const starred = new Set(this.favorites.listByType('session').map((f) => f.entity_id))
+      const removed = await this.board.prune(starred)
+      if (removed) this.output.appendLine(`[board] pruned ${removed} expired seeded item(s)`)
+    } catch (err) {
+      this.output.appendLine(`[board] prune failed: ${String(err)}`)
+    }
+  }
+
   dispose(): void {
     this.unsubscribeIndex?.()
     void this.indexerInstance.dispose()
     this.favorites.dispose()
+    this.board.dispose()
     for (const d of this.disposables.splice(0)) d.dispose()
   }
 }

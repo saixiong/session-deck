@@ -330,6 +330,11 @@
           "minimum": 16,
           "default": 512,
           "description": "Transcripts larger than this are indexed from their head and tail only; token totals for them show as approximate."
+        },
+        "sessionDeck.openDashboardWithSidebar": {
+          "type": "boolean",
+          "default": true,
+          "description": "Open the Session Deck dashboard tab when the Session Deck sidebar is opened. The sidebar keeps the focus either way."
         }
       }
     },

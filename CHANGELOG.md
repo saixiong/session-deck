@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+- Fixed: with the Review modal open, typing in another Claude Code session pulled the caret out of
+  its composer. The dialog restored focus from an effect whose dependency list contained a handler
+  that was a new function on every render, so every state push — and a push follows every keystroke
+  in any indexed session — fired the restore. It now restores focus on close only, and only when
+  the webview still has it.
+- The Session Deck sidebar now opens the dashboard tab too (`sessionDeck.openDashboardWithSidebar`,
+  on by default); the sidebar keeps the focus.
+- Board: `board.json` is now actually pruned on load, as documented. `session-deck board` prints the
+  same order as the dashboard (it sorted by priority alone before, with no recency tiebreak and no
+  blockers-first rule), refuses an unknown `--kind` instead of returning an empty board, and refuses
+  a `--prompt` prefix that matches more than one session instead of composing one prompt out of
+  several sessions' items. An item that appears in both a session's to-do and blocked lists is one
+  row, now tagged as the blocker. The Board's empty state tells apart "nothing starred",
+  "starred but not reviewed" (with the Analyse button) and "everything closed".
+- **Deck Board** ([docs/SPEC_BOARD.md](docs/SPEC_BOARD.md)): a `Favorites ⇄ Board` switch in the
+  dashboard showing every outstanding to-do and blocker across every starred session, each
+  classified `mechanical` / `decision` / `user_action` by the review that already runs (no extra
+  model call). Filter by kind, mark done or dismissed (state persists in `~/.session-deck/board.json`
+  and survives a re-analysis that did not reword the item), and multi-select across sessions to seed
+  them back — grouped per session, one click each, seeded never sent. `session-deck board` prints
+  the same queue in the terminal.
+- Reviews now carry `items[]` alongside `next_steps`/`blockers`; the strings stay canonical, so an
+  item the model fails to classify degrades to "needs triage" rather than being mis-tagged. Reports
+  written before this count as out of date, so one Analyse brings them current.
 - Review: a **completion score** (0–100 with a one-line reason) per session, shown as a meter on
   the card, averaged in the modal header, and as a clickable badge on each favorite card; reports
   written before the score count as out of date so one Analyse brings them up to date.

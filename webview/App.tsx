@@ -4,6 +4,7 @@ import type { CandidatesPayload, DashboardState, Period } from '../src/shared/me
 import { PERIODS } from '../src/shared/messages'
 import { onHostMessage, post } from './vscodeApi'
 import { FavoritesSection } from './components/FavoritesSection'
+import { BoardView } from './components/BoardView'
 import { PickerModal } from './components/PickerModal'
 import { ReviewModal } from './components/ReviewModal'
 import { Shelf } from './components/Shelf'
@@ -68,6 +69,7 @@ export function App() {
   }
 
   const { prefs } = state
+  const boardOpen = state.board.rows.filter((r) => r.state === null || r.state === 'seeded').length
   const setPrefs = (patch: Partial<typeof prefs>) => post({ type: 'setPrefs', prefs: patch })
   const favoritedByType = new Map<FavoriteEntityType, Set<string>>()
   for (const g of state.groups)
@@ -80,6 +82,26 @@ export function App() {
           <span class="codicon codicon-dashboard" aria-hidden="true" /> Session Deck
         </h1>
         <div class="deck__controls" role="group" aria-label="View options">
+          <span class="segmented" role="group" aria-label="Mode">
+            <button
+              class="control"
+              type="button"
+              aria-pressed={prefs.mode !== 'board'}
+              onClick={() => setPrefs({ mode: 'favorites' })}
+            >
+              <span class="codicon codicon-star-full" aria-hidden="true" /> Favorites
+            </button>
+            <button
+              class="control"
+              type="button"
+              aria-pressed={prefs.mode === 'board'}
+              title="Everything your starred sessions still owe you, in one list"
+              onClick={() => setPrefs({ mode: 'board' })}
+            >
+              <span class="codicon codicon-checklist" aria-hidden="true" /> Board
+              {boardOpen ? <span class="pill">{boardOpen}</span> : null}
+            </button>
+          </span>
           <select
             class="control"
             aria-label="Period"
@@ -135,39 +157,53 @@ export function App() {
 
       <StatStrip tiles={state.stats} />
 
-      {state.groups.map((group) => (
-        <FavoritesSection
-          key={group.entityType}
-          group={group}
+      {prefs.mode === 'board' ? (
+        <BoardView
+          board={state.board}
           prefs={prefs}
-          workspaceKeys={state.workspaceKeys}
-          onAdd={() => setPicker({ entityType: group.entityType, label: group.label })}
-          onReview={
-            group.entityType === 'session' ? (focus) => setReviewOpen({ focus }) : undefined
-          }
-          reviewEnabled={group.items.length > 0 || state.review.extraIds.length > 0}
-          reviews={group.entityType === 'session' ? state.review.reviews : undefined}
+          onReview={(focus) => setReviewOpen({ focus })}
         />
-      ))}
+      ) : null}
 
-      <Shelf
-        id="live"
-        title="Live now"
-        icon="pulse"
-        cards={state.live}
-        prefs={prefs}
-        emptyText="No running Claude Code session that isn't already starred."
-      />
-      <Shelf
-        id="suggested"
-        title="Suggested"
-        subtitle="recently active, not yet starred"
-        icon="sparkle"
-        cards={state.suggested}
-        prefs={prefs}
-        emptyText=""
-        hideWhenEmpty
-      />
+      {prefs.mode === 'board'
+        ? null
+        : state.groups.map((group) => (
+            <FavoritesSection
+              key={group.entityType}
+              group={group}
+              prefs={prefs}
+              workspaceKeys={state.workspaceKeys}
+              onAdd={() => setPicker({ entityType: group.entityType, label: group.label })}
+              onReview={
+                group.entityType === 'session' ? (focus) => setReviewOpen({ focus }) : undefined
+              }
+              reviewEnabled={group.items.length > 0 || state.review.extraIds.length > 0}
+              reviews={group.entityType === 'session' ? state.review.reviews : undefined}
+            />
+          ))}
+
+      {prefs.mode === 'board' ? null : (
+        <>
+          <Shelf
+            id="live"
+            title="Live now"
+            icon="pulse"
+            cards={state.live}
+            prefs={prefs}
+            emptyText="No running Claude Code session that isn't already starred."
+          />
+          <Shelf
+            id="suggested"
+            title="Suggested"
+            subtitle="recently active, not yet starred"
+            icon="sparkle"
+            cards={state.suggested}
+            prefs={prefs}
+            emptyText=""
+            hideWhenEmpty
+          />
+        </>
+      )}
 
       {picker ? (
         <PickerModal

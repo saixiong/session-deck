@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { applyRecord } from '../index/records'
+import { itemIdOf } from '../shared/board'
 import { bigSession, ordinarySession, rec, ts, writeSession } from '../index/testFixtures'
 import { fastTier, newEntry } from '../index/tiers'
 import type { SessionIndexEntry } from '../index/types'
@@ -46,6 +47,7 @@ const GOOD = {
   priority_reason: 'A PR is waiting.',
   completion: 70,
   completion_reason: 'Fix and test are in; not merged.',
+  items: [{ text: 'Merge PR #42', kind: 'mechanical', effort: 'small' }],
   options: [
     {
       id: 'merge',
@@ -67,6 +69,14 @@ describe('schema / parseReview', () => {
     const parsed = parseReview({ ...GOOD, priority: 9 }, undefined)
     expect(parsed.priority).toBe(5)
     expect(parsed.completion).toBe(70)
+    expect(parsed.items).toHaveLength(1)
+    expect(parsed.items[0]).toMatchObject({
+      text: 'Merge PR #42',
+      source: 'next_step',
+      kind: 'mechanical',
+      effort: 'small',
+    })
+    expect(parsed.items[0]!.id).toBe(itemIdOf('Merge PR #42'))
     expect(parsed.completion_reason).toBe('Fix and test are in; not merged.')
     // Out-of-band or missing scores: clamped, or unknown — never a fake 0.
     expect(parseReview({ ...GOOD, completion: 140 }, undefined).completion).toBe(100)
@@ -134,6 +144,8 @@ describe('schema / parseReview', () => {
     expect(SYSTEM_PROMPT).toContain('Completion is a percentage')
     expect(REVIEW_SCHEMA.required).toContain('options')
     expect(REVIEW_SCHEMA.required).toContain('completion')
+    expect(REVIEW_SCHEMA.required).toContain('items')
+    expect(SYSTEM_PROMPT).toContain('user_action')
   })
 })
 
@@ -317,6 +329,12 @@ describe('ReviewRunner', () => {
     // A report from before the completion score is out of date too.
     expect(runner.isStale({ ...store.get('b')!, completion: null }, entries.b)).toBe(true)
     expect(runner.isStale(store.get('b')!, entries.b)).toBe(false)
+    // …as is one whose outstanding work carries no usable classification (B9),
+    // while a report with nothing outstanding is fine without items.
+    expect(runner.isStale({ ...store.get('b')!, items: [] }, entries.b)).toBe(true)
+    expect(
+      runner.isStale({ ...store.get('b')!, items: [], next_steps: [], blockers: [] }, entries.b)
+    ).toBe(false)
   })
 
   it('a failed session is reported inline and never cached; the others complete', async () => {

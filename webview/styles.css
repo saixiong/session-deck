@@ -1306,3 +1306,279 @@ body.vscode-high-contrast-light .modal {
   font-size: 1.05em;
   padding: 6px 14px;
 }
+
+/* ── Deck Board (SPEC_BOARD B5) ─────────────────────────────────────────── */
+
+.board {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.board__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+
+.board__status {
+  font-size: 0.95em;
+}
+
+.board__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font: inherit;
+  font-size: 0.85em;
+  padding: 2px 9px;
+  border-radius: 11px;
+  border: 1px solid var(--deck-border);
+  background: transparent;
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+}
+
+.chip:hover,
+.chip:focus-visible {
+  background: var(--vscode-toolbar-hoverBackground, var(--deck-border));
+  outline: none;
+}
+
+.chip--on {
+  color: var(--vscode-foreground);
+  border-color: var(--vscode-focusBorder);
+  background: var(--vscode-toolbar-hoverBackground, transparent);
+}
+
+.chip .codicon {
+  font-size: 12px;
+}
+
+.pill {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 9px;
+  font-size: 0.85em;
+  font-variant-numeric: tabular-nums;
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+}
+
+.board__bulk {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--vscode-focusBorder);
+  border-radius: var(--deck-radius);
+  background: var(--vscode-editorWidget-background, transparent);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.board__bulk-count {
+  margin-right: 4px;
+}
+
+.board__queue {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+}
+
+.board__queue-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border: 1px solid var(--deck-border);
+  border-radius: var(--deck-radius);
+  max-width: 100%;
+}
+
+.board__queue-title {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.board__group {
+  border: 1px solid var(--deck-border);
+  border-radius: var(--deck-radius);
+  overflow: hidden;
+}
+
+.board__group-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--vscode-editorWidget-background, transparent);
+  border-bottom: 1px solid var(--deck-border);
+}
+
+.board__session,
+.linkish {
+  font: inherit;
+  font-weight: 600;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--vscode-textLink-foreground);
+  cursor: pointer;
+  text-align: left;
+}
+
+.board__session:hover,
+.linkish:hover {
+  text-decoration: underline;
+}
+
+.board__group-meta {
+  font-size: 0.85em;
+}
+
+.board__group-select {
+  margin-left: auto;
+  font: inherit;
+  font-size: 0.85em;
+  padding: 0 8px;
+  border: 1px solid var(--deck-border);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+}
+
+.board__items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.board__empty {
+  padding: 12px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.board__empty p {
+  margin: 0;
+}
+
+.bitem {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 5px 10px;
+  border-top: 1px solid var(--deck-border);
+}
+
+.board__items .bitem:first-child {
+  border-top: none;
+}
+
+.bitem:hover {
+  background: var(--vscode-list-hoverBackground, transparent);
+}
+
+.bitem--closed {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+
+.bitem__check {
+  margin: 3px 0 0;
+  flex: 0 0 auto;
+}
+
+.bitem__kind {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.bitem--mechanical .bitem__kind {
+  color: var(--vscode-charts-green, var(--vscode-foreground));
+}
+
+.bitem--decision .bitem__kind {
+  color: var(--vscode-charts-orange, var(--vscode-foreground));
+}
+
+.bitem--user_action .bitem__kind {
+  color: var(--vscode-charts-blue, var(--vscode-foreground));
+}
+
+.bitem__text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.bitem__blocker {
+  margin-right: 6px;
+}
+
+.bitem__effort,
+.bitem__state {
+  flex: 0 0 auto;
+  font-size: 0.8em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.bitem__actions {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+}
+
+.bitem:hover .bitem__actions,
+.bitem:focus-within .bitem__actions {
+  opacity: 1;
+}
+
+.bitem__act {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font: inherit;
+  font-size: 0.8em;
+  padding: 0 6px;
+  line-height: 18px;
+  border-radius: 9px;
+  border: 1px solid var(--deck-border);
+  background: transparent;
+  color: var(--vscode-textLink-foreground);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.bitem__act:hover,
+.bitem__act:focus-visible {
+  background: var(--vscode-toolbar-hoverBackground, var(--deck-border));
+  outline: none;
+}
+
+.bitem__act .codicon {
+  font-size: 12px;
+}

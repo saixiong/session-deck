@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/pre
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FavoriteCard, FavoriteGroup, FavoriteItem } from '../../src/shared/cards'
 import type { ReviewState } from '../../src/shared/messages'
+import { reconcileItems } from '../../src/shared/board'
 import type { BatchProgress, ChatReview } from '../../src/shared/review'
 import { posted } from '../test/setup'
 import { ReviewModal } from './ReviewModal'
@@ -53,6 +54,7 @@ const review = (
   priority_reason: `because ${id}`,
   completion: 60,
   completion_reason: `sixty because ${id}`,
+  items: reconcileItems(['do the next thing'], [], []),
   options: [
     { id: 'one', label: 'Option one', description: 'first', prompt: `PROMPT ONE ${id}` },
     { id: 'two', label: 'Option two', description: 'second', prompt: `PROMPT TWO ${id}` },
