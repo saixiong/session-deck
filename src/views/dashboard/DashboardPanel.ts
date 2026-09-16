@@ -3,15 +3,20 @@ import { isVisibleEntry } from '../../index/createIndexer'
 import { computeStats, formatCount, isPeriod } from '../../index/stats'
 import { MAX_REVIEW_IDS } from '../../analyze/ReviewRunner'
 import { resolveTitle } from '../../index/records'
+import { itemsOf, promptForItems } from '../../shared/board'
+import { promptForItem } from '../../shared/review'
 import { buildFavoriteGroups } from '../../registry/favoritesView'
+import { projectLabel } from '../../registry/sessionResolver'
 import type { Services } from '../../services'
 import { resolveClaudeCli, type ClaudeCliLocation } from '../../util/claudeCli'
 import type { FavoriteCard } from '../../shared/cards'
 import type {
+  BoardRow,
   DashboardPrefs,
   DashboardState,
   HostToWebview,
   Period,
+  ReviewState,
   StatTileData,
   WebviewToHost,
 } from '../../shared/messages'
@@ -258,6 +263,19 @@ export class DashboardPanel {
         this.extraReviewIds.delete(msg.sessionId)
         await this.push()
         return
+      case 'boardSetState':
+        await services.board.setStates(
+          msg.items.map((i) => ({
+            sessionId: i.sessionId,
+            item: { id: i.itemId, text: i.text },
+            state: msg.state,
+          }))
+        )
+        await this.push()
+        return
+      case 'boardSeed':
+        await this.seedBoardItems(msg.sessionId, msg.items, msg.copyOnly === true)
+        return
       case 'browse': {
         const resolver = services.registry.get(msg.entityType)
         if (!resolver) return
@@ -314,6 +332,7 @@ export class DashboardPanel {
 
     const groups = buildFavoriteGroups(favorites.list(), registry)
     const favoritedIds = new Set(favorites.listByType('session').map((f) => f.entity_id))
+    const review = await this.reviewState(favoritedIds)
     // Live sessions already starred show their ● on the favorite card; the
     // strip lists the rest (a live session with no transcript yet included).
     const liveCards: FavoriteCard[] = []
@@ -398,8 +417,94 @@ export class DashboardPanel {
       suggested,
       workspaceKeys: (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath),
       browsable: registry.all().map((r) => r.entityType),
-      review: await this.reviewState(favoritedIds),
+      board: this.buildBoard(favoritedIds, review),
+      review,
     }
+  }
+
+  /**
+   * Seed one session's selected items (§B6): a single item keeps the existing
+   * per-item template, several share one numbered prompt that tells the agent
+   * to stop at anything that would fork the work. Seeded, never sent (D9).
+   */
+  private async seedBoardItems(
+    sessionId: string,
+    items: Array<{ itemId: string; text: string }>,
+    copyOnly: boolean
+  ): Promise<void> {
+    if (items.length === 0) return
+    const texts = items.map((i) => i.text)
+    const prompt =
+      texts.length === 1 ? promptForItem('next_step', texts[0]!) : promptForItems(texts)
+    if (copyOnly) {
+      await vscode.env.clipboard.writeText(prompt)
+      void vscode.window.showInformationMessage(
+        `Session Deck: prompt for ${texts.length} item${texts.length === 1 ? '' : 's'} copied.`
+      )
+    } else {
+      const entry = this.services.indexer.get(sessionId)
+      const outcome = await this.services.opener.open({
+        sessionId,
+        prompt,
+        ...(entry?.cwd ? { cwd: entry.cwd } : {}),
+        ...(entry ? { title: resolveTitle(entry) } : {}),
+      })
+      // A failed open must not mark work as dispatched.
+      if (!outcome.ok) return
+    }
+    await this.services.board.setStates(
+      items.map((i) => ({ sessionId, item: { id: i.itemId, text: i.text }, state: 'seeded' }))
+    )
+    await this.push()
+  }
+
+  /**
+   * The Board (SPEC_BOARD B5): every outstanding item of every starred session,
+   * flattened. Sessions rank by priority then recency; within a session
+   * blockers come before next steps, then the review's own order. Rows keep
+   * their `state` so the webview can filter — the host does not decide what is
+   * hidden, because the "show done" toggle is a webview pref.
+   */
+  private buildBoard(favoritedIds: Set<string>, review: ReviewState): DashboardState['board'] {
+    const { board, indexer, favorites } = this.services
+    const labels = new Map(
+      favorites.listByType('session').map((f) => [f.entity_id, f.label] as const)
+    )
+    const rows: BoardRow[] = []
+    let unreviewed = 0
+    const sessions = [...favoritedIds]
+      .map((id) => ({ id, report: review.reviews[id], entry: indexer.get(id) }))
+      .sort((a, b) => {
+        const pa = a.report?.priority ?? -1
+        const pb = b.report?.priority ?? -1
+        if (pa !== pb) return pb - pa
+        return (b.entry?.lastActiveAt ?? '') < (a.entry?.lastActiveAt ?? '') ? -1 : 1
+      })
+    for (const { id, report, entry } of sessions) {
+      if (!report) {
+        if (entry && !entry.missing) unreviewed++
+        continue
+      }
+      const items = itemsOf(report)
+      const ordered = [
+        ...items.filter((i) => i.source === 'blocker'),
+        ...items.filter((i) => i.source !== 'blocker'),
+      ]
+      for (const item of ordered) {
+        rows.push({
+          sessionId: id,
+          sessionTitle: entry && !entry.missing ? resolveTitle(entry) : (labels.get(id) ?? id),
+          project: entry ? projectLabel(entry) : null,
+          priority: report.priority,
+          priorityLabel: report.priority_label,
+          completion: report.completion,
+          stale: report.stale,
+          item,
+          state: board.get(id, item.id)?.state ?? null,
+        })
+      }
+    }
+    return { rows, unreviewed }
   }
 
   private async reviewState(favoritedIds: Set<string>): Promise<DashboardState['review']> {

@@ -17,6 +17,7 @@ import type { SessionIndexer } from './index/SessionIndexer'
 import { SessionOpener } from './open/SessionOpener'
 import { SessionResolver } from './registry/sessionResolver'
 import { ResolverRegistry } from './registry/types'
+import { BoardStore } from './store/BoardStore'
 import { FavoritesStore } from './store/FavoritesStore'
 import { resolveClaudeCli } from './util/claudeCli'
 import { expandHome } from './util/paths'
@@ -33,6 +34,7 @@ const LIVE_TTL_MS = 5_000
 export class Services implements vscode.Disposable {
   readonly output: vscode.OutputChannel
   readonly favorites: FavoritesStore
+  readonly board: BoardStore
   readonly registry = new ResolverRegistry()
   readonly sessions: SessionResolver
   readonly opener: SessionOpener
@@ -62,11 +64,19 @@ export class Services implements vscode.Disposable {
     )
     this.favorites = new FavoritesStore(join(dataDir, 'favorites.json'))
     this.favorites.onDidChange(() => this.favoritesEmitter.fire())
+    // The board shares the favorites signal: both change what the dashboard
+    // must redraw, and the panel rebuilds its whole state either way.
+    this.board = new BoardStore(join(dataDir, 'board.json'))
+    this.board.onDidChange(() => this.favoritesEmitter.fire())
     this.reviews = new ReviewStore(join(dataDir, 'reviews'))
     this.favoritesReady = Promise.all([
       this.favorites.load().then(
         () => this.favorites.watch(),
         (err: unknown) => this.output.appendLine(`[favorites] load failed: ${String(err)}`)
+      ),
+      this.board.load().then(
+        () => this.board.watch(),
+        (err: unknown) => this.output.appendLine(`[board] load failed: ${String(err)}`)
       ),
       this.reviews
         .load()
@@ -184,6 +194,7 @@ export class Services implements vscode.Disposable {
     this.unsubscribeIndex?.()
     void this.indexerInstance.dispose()
     this.favorites.dispose()
+    this.board.dispose()
     for (const d of this.disposables.splice(0)) d.dispose()
   }
 }

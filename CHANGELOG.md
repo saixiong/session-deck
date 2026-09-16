@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **Deck Board** ([docs/SPEC_BOARD.md](docs/SPEC_BOARD.md)): a `Favorites ⇄ Board` switch in the
+  dashboard showing every outstanding to-do and blocker across every starred session, each
+  classified `mechanical` / `decision` / `user_action` by the review that already runs (no extra
+  model call). Filter by kind, mark done or dismissed (state persists in `~/.session-deck/board.json`
+  and survives a re-analysis that did not reword the item), and multi-select across sessions to seed
+  them back — grouped per session, one click each, seeded never sent. `session-deck board` prints
+  the same queue in the terminal.
+- Reviews now carry `items[]` alongside `next_steps`/`blockers`; the strings stay canonical, so an
+  item the model fails to classify degrades to "needs triage" rather than being mis-tagged. Reports
+  written before this count as out of date, so one Analyse brings them current.
 - Review: a **completion score** (0–100 with a one-line reason) per session, shown as a meter on
   the card, averaged in the modal header, and as a clickable badge on each favorite card; reports
   written before the score count as out of date so one Analyse brings them up to date.

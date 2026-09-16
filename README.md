@@ -24,6 +24,13 @@ Session Deck is an independent project and is not affiliated with Anthropic.
   composer, so Session Deck focuses it and you press ⌘V. Reports are cached until the session
   moves on; the score also shows as a badge on each favorite card.
 
+- **Board** — the `Board` switch in the header flattens every outstanding to-do and blocker from
+  every starred session into one list, each tagged by what kind of work it is: **mechanical** (one
+  obvious way to do it), **decision** (a human choice that changes what gets built), **yours**
+  (only you can do it), or **needs triage** (the classification did not survive). Filter by kind,
+  tick items off, and select any number — across sessions — to seed them back into their own
+  sessions, one click per session, still typed and never sent.
+
 ![Review](media/screenshot-review.png)
 
 ### When a report goes out of date
@@ -67,7 +74,7 @@ opens in the Claude Code panel; one from another repository opens a new window o
 
 | Setting                        | Default              | Purpose                                               |
 | ------------------------------ | -------------------- | ----------------------------------------------------- |
-| `sessionDeck.dataDir`          | `~/.session-deck`    | favorites + cached reviews                            |
+| `sessionDeck.dataDir`          | `~/.session-deck`    | favorites + cached reviews + board state              |
 | `sessionDeck.claudeProjectsDir`| `~/.claude/projects` | read-only source; override for `CLAUDE_CONFIG_DIR`    |
 | `sessionDeck.claudePath`       | auto                 | `claude` CLI for reviews (bundled → PATH → ~/.local)  |
 | `sessionDeck.model`            | `sonnet`             | model alias for reviews                               |

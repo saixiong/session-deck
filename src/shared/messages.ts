@@ -7,6 +7,7 @@
  * are the runtime guards the receivers use, because postMessage is untyped and
  * a stale webview talking to a newer host must be ignored, never crash it.
  */
+import type { BoardItemKind, BoardItemState, ReviewItem } from './board'
 import type { FavoriteCard, FavoriteEntityType, FavoriteGroup } from './cards'
 import type { BatchProgress, ChatReview } from './review'
 
@@ -34,9 +35,17 @@ export interface IndexSummary {
 }
 
 /** Per-user view preferences, persisted by the host (globalState) so windows agree. */
+export type DashboardMode = 'favorites' | 'board'
+
 export interface DashboardPrefs {
   view: 'grid' | 'list'
   verbose: boolean
+  /** Which face of the dashboard is showing (SPEC_BOARD B1). */
+  mode: DashboardMode
+  /** Board kind filter; empty means every kind. */
+  boardKinds: BoardItemKind[]
+  /** Board: show rows already marked done or dismissed. */
+  boardShowClosed: boolean
   /** Section tip strips the user explicitly expanded/collapsed, by entity type. */
   tips: Record<string, boolean>
   /** Collapsed sections, by section id. */
@@ -46,6 +55,9 @@ export interface DashboardPrefs {
 export const DEFAULT_PREFS: DashboardPrefs = {
   view: 'grid',
   verbose: true,
+  mode: 'favorites',
+  boardKinds: [],
+  boardShowClosed: false,
   tips: {},
   collapsed: {},
 }
@@ -59,6 +71,25 @@ export interface ReviewState {
   extraCards: Record<string, FavoriteCard>
   model: string
   cli: { found: boolean; path: string | null; source: string | null }
+}
+
+/** One row of the Board: a review item joined with its state and its session's facts (B5). */
+export interface BoardRow {
+  sessionId: string
+  sessionTitle: string
+  project: string | null
+  priority: number
+  priorityLabel: string
+  completion: number | null
+  stale: boolean
+  item: ReviewItem
+  state: BoardItemState | null
+}
+
+export interface BoardState {
+  rows: BoardRow[]
+  /** Starred sessions with no report yet — the board cannot list what was never reviewed. */
+  unreviewed: number
 }
 
 export interface DashboardState {
@@ -75,6 +106,7 @@ export interface DashboardState {
   /** Which entity types can be browsed by the picker. */
   browsable: FavoriteEntityType[]
   review: ReviewState
+  board: BoardState
 }
 
 export interface CandidatesPayload {
@@ -114,6 +146,20 @@ export type WebviewToHost =
   | { type: 'reviewCancel' }
   | { type: 'reviewDelete'; sessionId: string }
   | { type: 'reviewDismissExtra'; sessionId: string }
+  /** Done / Dismiss / clear, one message for a whole bulk action (B5.2). */
+  | {
+      type: 'boardSetState'
+      items: Array<{ sessionId: string; itemId: string; text: string }>
+      state: BoardItemState | null
+    }
+  /** Seed one session's selected items and mark them seeded (B6). */
+  | {
+      type: 'boardSeed'
+      sessionId: string
+      items: Array<{ itemId: string; text: string }>
+      /** Copy the composed prompt to the clipboard without opening anything. */
+      copyOnly?: boolean
+    }
 
 const HOST_TYPES: ReadonlySet<string> = new Set(['state', 'candidates', 'toast', 'showReview'])
 const WEBVIEW_TYPES: ReadonlySet<string> = new Set([
@@ -131,7 +177,10 @@ const WEBVIEW_TYPES: ReadonlySet<string> = new Set([
   'reviewCancel',
   'reviewDelete',
   'reviewDismissExtra',
+  'boardSetState',
+  'boardSeed',
 ])
+const BOARD_STATES: ReadonlySet<string> = new Set(['done', 'dismissed', 'seeded'])
 const COMMANDS: ReadonlySet<string> = new Set(['reload', 'reindex'])
 const ENTITY_TYPES: ReadonlySet<string> = new Set(['session', 'project', 'pr'])
 const TARGETS: ReadonlySet<string> = new Set(['default', 'window', 'terminal'])
@@ -200,6 +249,32 @@ export function isWebviewToHost(value: unknown): value is WebviewToHost {
     case 'reviewDelete':
     case 'reviewDismissExtra':
       return str(v['sessionId'])
+    case 'boardSetState':
+      return (
+        (v['state'] === null || (str(v['state']) && BOARD_STATES.has(v['state']))) &&
+        Array.isArray(v['items']) &&
+        v['items'].every(
+          (i) =>
+            typeof i === 'object' &&
+            i !== null &&
+            str((i as Record<string, unknown>)['sessionId']) &&
+            str((i as Record<string, unknown>)['itemId']) &&
+            str((i as Record<string, unknown>)['text'])
+        )
+      )
+    case 'boardSeed':
+      return (
+        str(v['sessionId']) &&
+        (v['copyOnly'] === undefined || typeof v['copyOnly'] === 'boolean') &&
+        Array.isArray(v['items']) &&
+        v['items'].every(
+          (i) =>
+            typeof i === 'object' &&
+            i !== null &&
+            str((i as Record<string, unknown>)['itemId']) &&
+            str((i as Record<string, unknown>)['text'])
+        )
+      )
     default:
       return false
   }

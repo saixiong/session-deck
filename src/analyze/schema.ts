@@ -1,3 +1,5 @@
+import type { ReviewItem } from '../shared/board'
+import { reconcileItems } from '../shared/board'
 import type { ChatReview, ReviewOption } from '../shared/review'
 import { clampCompletion, clampPriority, priorityLabel } from '../shared/review'
 
@@ -22,6 +24,7 @@ export const REVIEW_SCHEMA = {
     'priority_reason',
     'completion',
     'completion_reason',
+    'items',
     'options',
   ],
   properties: {
@@ -33,6 +36,19 @@ export const REVIEW_SCHEMA = {
     priority_reason: { type: 'string' },
     completion: { type: 'integer', minimum: 0, maximum: 100 },
     completion_reason: { type: 'string' },
+    items: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['text', 'kind'],
+        properties: {
+          text: { type: 'string' },
+          kind: { type: 'string', enum: ['mechanical', 'decision', 'user_action'] },
+          effort: { type: 'string', enum: ['small', 'medium', 'large'] },
+        },
+      },
+    },
     options: {
       type: 'array',
       minItems: 1,
@@ -68,6 +84,13 @@ Reply with a single JSON object and nothing else. No prose, no code fence.
   "priority_reason": "One sentence on why it sits at that level.",
   "completion": 0-100,
   "completion_reason": "One sentence on what the score is measured against and what is missing.",
+  "items": [
+    {
+      "text": "Copied EXACTLY from next_steps or blockers above, not reworded.",
+      "kind": "mechanical | decision | user_action",
+      "effort": "small | medium | large"
+    }
+  ],
   "options": [
     {
       "id": "short-kebab-id",
@@ -93,6 +116,19 @@ judged against the transcript, not against the length of the lists:
   100  done, verified, and nothing is left to do — say so in the summary.
 Abandoned or trivial work still gets an honest number, not 100.
 
+"items" must contain one entry for EVERY string you put in next_steps AND \
+one for EVERY string you put in blockers — next_steps first, then blockers, \
+same order. If next_steps has 3 entries and blockers has 2, items has exactly \
+5. Never omit the blockers. Classify each as:
+  mechanical   one obvious way to do it; no judgment that forks the code \
+(merge the open PR, update the changelog, delete dead code).
+  decision     needs a human choice that changes what gets built \
+(which of two layouts, whether to fix an unrelated bug).
+  user_action  only the user can do it: pushing their own commits, approving \
+a submission, deciding when they are ready.
+Copy each "text" exactly as written above — do not reword, merge or split \
+entries. When unsure between mechanical and decision, answer decision.
+
 Rules:
 - Judge only from the transcript. Never invent progress that is not shown.
 - 2 to 4 options. Make them genuinely different choices, not rephrasings.
@@ -112,6 +148,7 @@ export interface ParsedReview {
   priority_reason: string
   completion: number | null
   completion_reason: string
+  items: ReviewItem[]
   options: ReviewOption[]
 }
 
@@ -126,17 +163,39 @@ export function parseReview(structured: unknown, resultText: string | undefined)
   if (!obj) throw new Error('the model returned no JSON object')
   const options = toOptions(obj['options'])
   if (options.length === 0) throw new Error('the model returned no usable directions')
+  const next_steps = strList(obj['next_steps'])
+  const blockers = strList(obj['blockers'])
   return {
     summary: str(obj['summary']),
     done: strList(obj['done']),
-    next_steps: strList(obj['next_steps']),
-    blockers: strList(obj['blockers']),
+    next_steps,
+    blockers,
     priority: clampPriority(obj['priority']),
     priority_reason: str(obj['priority_reason']),
     completion: clampCompletion(obj['completion']),
     completion_reason: str(obj['completion_reason']),
+    items: reconcileItems(next_steps, blockers, annotations(obj['items'])),
     options,
   }
+}
+
+/** The model's `items[]` as loose annotations; reconcileItems decides what survives (B3). */
+function annotations(v: unknown): Partial<ReviewItem>[] {
+  if (!Array.isArray(v)) return []
+  const out: Partial<ReviewItem>[] = []
+  for (const item of v) {
+    if (!isObject(item)) continue
+    const text = str(item['text'])
+    if (!text) continue
+    out.push({
+      text,
+      ...(typeof item['kind'] === 'string' ? { kind: item['kind'] as ReviewItem['kind'] } : {}),
+      ...(typeof item['effort'] === 'string'
+        ? { effort: item['effort'] as ReviewItem['effort'] }
+        : {}),
+    })
+  }
+  return out
 }
 
 export function makeReview(
@@ -174,6 +233,7 @@ export function emptyReview(base: Parameters<typeof makeReview>[0], now = new Da
       priority_reason: 'Nothing has happened in it.',
       completion: 0,
       completion_reason: 'No work has been asked for or done.',
+      items: [],
       options: [
         {
           id: 'start',

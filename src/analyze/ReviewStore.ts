@@ -1,6 +1,7 @@
 import { readdir, readFile, unlink } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { ChatReview } from '../shared/review'
+import { reconcileItems } from '../shared/board'
 import { clampCompletion, clampPriority, priorityLabel } from '../shared/review'
 import { writeFileAtomic } from '../util/atomicWrite'
 
@@ -101,18 +102,32 @@ export function parseReviewFile(raw: string): ChatReview | undefined {
         .filter((o) => o.label && o.prompt)
     : []
   const priority = clampPriority(r['priority'])
+  const next_steps = list('next_steps')
+  const blockers = list('blockers')
+  // Re-derived rather than trusted: ids stay ours (B6) and a hand-edited file
+  // cannot introduce an item the strings do not contain (B3).
+  const items = reconcileItems(
+    next_steps,
+    blockers,
+    Array.isArray(r['items'])
+      ? (r['items'] as unknown[]).filter(
+          (o): o is Record<string, unknown> => typeof o === 'object' && o !== null
+        )
+      : []
+  )
   return {
     conversation_id: r['conversation_id'],
     title: s('title'),
     summary: s('summary'),
     done: list('done'),
-    next_steps: list('next_steps'),
-    blockers: list('blockers'),
+    next_steps,
+    blockers,
     priority,
     priority_label: priorityLabel(priority),
     priority_reason: s('priority_reason'),
     completion: clampCompletion(r['completion']),
     completion_reason: s('completion_reason'),
+    items,
     options,
     model: s('model'),
     analyzed_at: s('analyzed_at'),
