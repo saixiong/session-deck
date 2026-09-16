@@ -26,6 +26,23 @@ Session Deck is an independent project and is not affiliated with Anthropic.
 
 ![Review](media/screenshot-review.png)
 
+### When a report goes out of date
+
+A report is stored with a fingerprint of the session it described — its message count and last
+activity. Every time the dashboard rebuilds its state (you open it, a rescan finishes, a batch
+ends, you star or unstar something) each cached report is compared against the session as the
+index currently sees it, and it is marked **out of date** when:
+
+- the session has moved on — more messages, or activity after the report was written,
+- its transcript is gone from `~/.claude/projects`,
+- or the report predates a field the current version reports (the completion score, say), so one
+  analysis brings it up to date.
+
+Nothing re-analyses itself. Out of date only changes the badge and adds the session to what
+**Analyse N sessions** would cover; the model call happens when you ask for it. The same rule
+drives the CLI: `session-deck review --run` skips fresh reports and re-runs stale ones unless you
+pass `--force`.
+
 ## How it works, and what it costs
 
 - Session Deck **reads** `~/.claude/projects` (the transcripts Claude Code already keeps) and
