@@ -90,6 +90,8 @@ export interface BoardState {
   rows: BoardRow[]
   /** Starred sessions with no report yet — the board cannot list what was never reviewed. */
   unreviewed: number
+  /** Starred sessions in total, so an empty board can say which kind of empty it is (B5.2). */
+  starred: number
 }
 
 export interface DashboardState {

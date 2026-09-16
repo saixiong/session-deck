@@ -64,8 +64,17 @@ one extra field in a model call that already runs.
 
 **Reconciliation (B3).** After parsing, walk `next_steps[]` then `blockers[]` in order. For each
 string, look for a model item whose normalised text equals it; adopt its `kind`/`effort` if found,
-otherwise emit `kind: "unclassified"`. Model items matching no string are **dropped**. The result is
-therefore always exactly as long as `next_steps.length + blockers.length`, in that order.
+otherwise emit `kind: "unclassified"`. Model items matching no string are **dropped**. The result
+follows that order: every `next_step`, then every `blocker` not already emitted.
+
+It is **not** always `next_steps.length + blockers.length` long, which an earlier draft of this
+document claimed. Two strings that normalise the same are one piece of work and must produce one
+row, because the id is derived from the text: a second row would share the first one's `board.json`
+key, so marking either done would mark both, and the board would show a phantom item that could
+never be cleared. Empty strings are dropped for the same reason. A string that appears in both
+lists is emitted once, in its `next_steps` position, but tagged `source: "blocker"` — of the two
+readings the model offered, blocked is the one worth surfacing, and §B5.1 sorts it to the top of
+its session accordingly.
 
 `normalise(text)` = trim, collapse internal whitespace, strip a leading list marker (`- `, `1. `),
 strip trailing punctuation, lowercase. `hash` = FNV-1a 32-bit applied twice with different offsets,

@@ -3,7 +3,7 @@ import { isVisibleEntry } from '../../index/createIndexer'
 import { computeStats, formatCount, isPeriod } from '../../index/stats'
 import { MAX_REVIEW_IDS } from '../../analyze/ReviewRunner'
 import { resolveTitle } from '../../index/records'
-import { itemsOf, promptForItems } from '../../shared/board'
+import { compareBoardSessions, itemsOf, orderItems, promptForItems } from '../../shared/board'
 import { promptForItem } from '../../shared/review'
 import { buildFavoriteGroups } from '../../registry/favoritesView'
 import { projectLabel } from '../../registry/sessionResolver'
@@ -51,16 +51,22 @@ export class DashboardPanel {
     value: undefined,
   }
 
-  static show(services: Services): DashboardPanel {
+  /**
+   * `preserveFocus` leaves the caret where the user put it — used when the
+   * dashboard opens as a side effect of something else, such as revealing the
+   * sidebar, where taking the focus would be a surprise.
+   */
+  static show(services: Services, opts: { preserveFocus?: boolean } = {}): DashboardPanel {
     const column = vscode.window.activeTextEditor?.viewColumn ?? vscode.ViewColumn.One
+    const preserveFocus = opts.preserveFocus === true
     if (DashboardPanel.current) {
-      DashboardPanel.current.panel.reveal(column)
+      DashboardPanel.current.panel.reveal(column, preserveFocus)
       return DashboardPanel.current
     }
     const panel = vscode.window.createWebviewPanel(
       DashboardPanel.viewType,
       'Session Deck',
-      column,
+      { viewColumn: column, preserveFocus },
       {
         enableScripts: true,
         retainContextWhenHidden: true,
@@ -474,23 +480,18 @@ export class DashboardPanel {
     let unreviewed = 0
     const sessions = [...favoritedIds]
       .map((id) => ({ id, report: review.reviews[id], entry: indexer.get(id) }))
-      .sort((a, b) => {
-        const pa = a.report?.priority ?? -1
-        const pb = b.report?.priority ?? -1
-        if (pa !== pb) return pb - pa
-        return (b.entry?.lastActiveAt ?? '') < (a.entry?.lastActiveAt ?? '') ? -1 : 1
-      })
+      .sort((a, b) =>
+        compareBoardSessions(
+          { priority: a.report?.priority ?? null, lastActiveAt: a.entry?.lastActiveAt ?? '' },
+          { priority: b.report?.priority ?? null, lastActiveAt: b.entry?.lastActiveAt ?? '' }
+        )
+      )
     for (const { id, report, entry } of sessions) {
       if (!report) {
         if (entry && !entry.missing) unreviewed++
         continue
       }
-      const items = itemsOf(report)
-      const ordered = [
-        ...items.filter((i) => i.source === 'blocker'),
-        ...items.filter((i) => i.source !== 'blocker'),
-      ]
-      for (const item of ordered) {
+      for (const item of orderItems(itemsOf(report))) {
         rows.push({
           sessionId: id,
           sessionTitle: entry && !entry.missing ? resolveTitle(entry) : (labels.get(id) ?? id),
@@ -504,7 +505,7 @@ export class DashboardPanel {
         })
       }
     }
-    return { rows, unreviewed }
+    return { rows, unreviewed, starred: favoritedIds.size }
   }
 
   private async reviewState(favoritedIds: Set<string>): Promise<DashboardState['review']> {

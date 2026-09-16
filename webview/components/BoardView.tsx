@@ -2,7 +2,9 @@ import { useMemo, useState } from 'preact/hooks'
 import type { BoardItemKind, BoardItemState } from '../../src/shared/board'
 import { BOARD_KINDS, KIND_ICONS, KIND_LABELS } from '../../src/shared/board'
 import type { BoardRow, BoardState, DashboardPrefs } from '../../src/shared/messages'
+import { deckFor } from '../tipContent'
 import { post } from '../vscodeApi'
+import { SectionTipStrip } from './SectionTipStrip'
 
 interface Props {
   board: BoardState
@@ -117,13 +119,7 @@ export function BoardView({ board, prefs, onReview }: Props) {
       ) : null}
 
       {groups.length === 0 ? (
-        <p class="muted board__empty">
-          {board.rows.length
-            ? 'Nothing matches these filters.'
-            : board.unreviewed
-              ? 'Nothing to work through yet — analyse your starred sessions to fill the board.'
-              : 'Nothing outstanding. Star a session and review it to fill the board.'}
-        </p>
+        <BoardEmpty board={board} onReview={onReview} />
       ) : (
         groups.map(({ sessionId, rows }) => {
           const head = rows[0]!
@@ -175,6 +171,57 @@ export function BoardView({ board, prefs, onReview }: Props) {
         })
       )}
     </section>
+  )
+}
+
+/**
+ * The three ways a board is empty, which are not the same problem (B5.2):
+ * nothing starred yet gets the favorites tip deck, starred-but-unreviewed gets
+ * the analyse action itself rather than a description of it, and a board
+ * emptied by its own filters says so.
+ */
+function BoardEmpty({
+  board,
+  onReview,
+}: {
+  board: BoardState
+  onReview: (focus: string | null) => void
+}) {
+  if (board.rows.length) return <p class="muted board__empty">Nothing matches these filters.</p>
+  if (board.starred === 0) {
+    return (
+      <div class="board__empty">
+        <p class="muted">Star a session and review it to fill the board.</p>
+        <SectionTipStrip deck={deckFor('session', 'Sessions')} />
+      </div>
+    )
+  }
+  if (board.unreviewed) {
+    return (
+      <div class="board__empty">
+        <p class="muted">
+          Nothing to work through yet — the board lists what a review found outstanding.
+        </p>
+        <button
+          class="button button--primary"
+          type="button"
+          onClick={() => {
+            // The modal's own action, not a second analysis path (B5.2): open
+            // it so the batch's per-session progress is visible while it runs.
+            onReview(null)
+            post({ type: 'reviewAnalyze', ids: null, force: false })
+          }}
+        >
+          <span class="codicon codicon-sparkle" aria-hidden="true" /> Analyse {board.unreviewed}{' '}
+          session{board.unreviewed === 1 ? '' : 's'}
+        </button>
+      </div>
+    )
+  }
+  return (
+    <p class="muted board__empty">
+      Nothing outstanding — every item your reviews found is done or dismissed.
+    </p>
   )
 }
 

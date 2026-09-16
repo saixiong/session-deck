@@ -106,6 +106,13 @@ export function reconcileItems(
     const key = normaliseItemText(a.text)
     if (key && !byText.has(key)) byText.set(key, a)
   }
+  // A sentence the model put in both lists is one piece of work, and `blocker`
+  // is the truer half: it is the more severe reading and it is what sorts the
+  // row to the top of its session. Collected up front so the next_steps pass
+  // can already tag it, rather than emitting a second row — two rows sharing
+  // one content-derived id would share one board key, so ticking either would
+  // tick both.
+  const blocking = new Set(blockers.map(normaliseItemText).filter(Boolean))
   const out: ReviewItem[] = []
   const seen = new Set<string>()
   const add = (text: string, source: BoardItemSource) => {
@@ -116,7 +123,7 @@ export function reconcileItems(
     out.push({
       id: itemIdOf(text),
       text,
-      source,
+      source: blocking.has(key) ? 'blocker' : source,
       kind: isBoardItemKind(hit?.kind) ? hit.kind : 'unclassified',
       effort: isEffort(hit?.effort) ? hit.effort : null,
     })
@@ -124,6 +131,34 @@ export function reconcileItems(
   for (const t of nextSteps) add(t, 'next_step')
   for (const t of blockers) add(t, 'blocker')
   return out
+}
+
+/**
+ * Session order on the Board (B5.1): priority first, then the most recently
+ * active. Exported because the webview and the terminal must agree on what
+ * "first" means — the CLI prints the same queue the dashboard shows (B7).
+ *
+ * A total order: equal sessions compare 0. A comparator that never says
+ * "equal" is not merely untidy, it makes the sort's output depend on the
+ * input's existing order in ways TimSort does not promise.
+ */
+export function compareBoardSessions(
+  a: { priority: number | null; lastActiveAt: string },
+  b: { priority: number | null; lastActiveAt: string }
+): number {
+  const pa = a.priority ?? -1
+  const pb = b.priority ?? -1
+  if (pa !== pb) return pb - pa
+  if (a.lastActiveAt === b.lastActiveAt) return 0
+  return a.lastActiveAt < b.lastActiveAt ? 1 : -1
+}
+
+/** Within a session: blockers first, then the report's own order (B5.1). */
+export function orderItems(items: readonly ReviewItem[]): ReviewItem[] {
+  return [
+    ...items.filter((i) => i.source === 'blocker'),
+    ...items.filter((i) => i.source !== 'blocker'),
+  ]
 }
 
 function isEffort(v: unknown): v is BoardItemEffort {

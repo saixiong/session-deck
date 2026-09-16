@@ -81,7 +81,7 @@ export class Services implements vscode.Disposable {
       this.reviews
         .load()
         .catch((err: unknown) => this.output.appendLine(`[reviews] load failed: ${String(err)}`)),
-    ]).then(() => undefined)
+    ]).then(() => this.pruneBoard())
 
     // The runner reads settings per call so a model change applies to the next batch.
     const config = () => vscode.workspace.getConfiguration('sessionDeck')
@@ -188,6 +188,24 @@ export class Services implements vscode.Disposable {
     this.indexerInstance = this.boot(createIndexer(this.context, this.output))
     void old.dispose()
     this.indexEmitter.fire([])
+  }
+
+  /**
+   * `board.json` is pruned once both stores are loaded (B3.2): `seeded` rows
+   * whose session nobody stars any more expire after 30 days, so a file that
+   * only ever grows is not the price of using the Board. `done` and
+   * `dismissed` are decisions and are kept regardless of staleness.
+   *
+   * Never fatal — a board that could not be pruned is still a usable board.
+   */
+  private async pruneBoard(): Promise<void> {
+    try {
+      const starred = new Set(this.favorites.listByType('session').map((f) => f.entity_id))
+      const removed = await this.board.prune(starred)
+      if (removed) this.output.appendLine(`[board] pruned ${removed} expired seeded item(s)`)
+    } catch (err) {
+      this.output.appendLine(`[board] prune failed: ${String(err)}`)
+    }
   }
 
   dispose(): void {

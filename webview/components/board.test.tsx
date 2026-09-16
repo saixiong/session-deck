@@ -33,7 +33,11 @@ const DECIDE = item('Decide whether to fix the frost bug', 'decision')
 const PUSH = item('Push your local commits', 'user_action')
 const CI = item('CI is red on main', 'decision', 'blocker')
 
-const board = (rows: BoardRow[], unreviewed = 0): BoardState => ({ rows, unreviewed })
+const board = (rows: BoardRow[], unreviewed = 0, starred = 2): BoardState => ({
+  rows,
+  unreviewed,
+  starred,
+})
 const prefs = (patch: Partial<DashboardPrefs> = {}): DashboardPrefs => ({
   ...DEFAULT_PREFS,
   mode: 'board',
@@ -182,14 +186,24 @@ describe('BoardView', () => {
     ])
   })
 
-  it('says what to do when there is nothing on it', () => {
+  it('tells the three empty boards apart (B5.2)', () => {
+    // Nothing starred: the tip deck, same as an empty favorites section.
     const { rerender } = render(
-      <BoardView board={board([], 0)} prefs={prefs()} onReview={() => undefined} />
+      <BoardView board={board([], 0, 0)} prefs={prefs()} onReview={() => undefined} />
     )
     expect(screen.getByText(/Star a session and review it/)).toBeTruthy()
-    rerender(<BoardView board={board([], 3)} prefs={prefs()} onReview={() => undefined} />)
-    expect(screen.getByText(/analyse your starred sessions/)).toBeTruthy()
-    expect(screen.getByRole('button', { name: /3 sessions not reviewed yet/ })).toBeTruthy()
+    expect(document.querySelector('.tip')).toBeTruthy()
+
+    // Starred but unreviewed: the analyse action itself, not a description of it.
+    rerender(<BoardView board={board([], 3, 3)} prefs={prefs()} onReview={() => undefined} />)
+    expect(document.querySelector('.tip')).toBeNull()
+    expect(screen.getByRole('button', { name: /Analyse 3 sessions/ })).toBeTruthy()
+
+    // Everything reviewed and every item closed: neither of the above.
+    rerender(<BoardView board={board([], 0, 2)} prefs={prefs()} onReview={() => undefined} />)
+    expect(screen.getByText(/every item your reviews found is done or dismissed/)).toBeTruthy()
+
+    // Emptied by its own filters.
     rerender(
       <BoardView
         board={board([row('s1', 'A', MERGE)])}
@@ -198,5 +212,13 @@ describe('BoardView', () => {
       />
     )
     expect(screen.getByText('Nothing matches these filters.')).toBeTruthy()
+  })
+
+  it('the empty-board Analyse button opens the modal and runs the modal s own batch', () => {
+    const focused: Array<string | null> = []
+    render(<BoardView board={board([], 2, 2)} prefs={prefs()} onReview={(f) => focused.push(f)} />)
+    fireEvent.click(screen.getByRole('button', { name: /Analyse 2 sessions/ }))
+    expect(focused).toEqual([null])
+    expect(posted).toEqual([{ type: 'reviewAnalyze', ids: null, force: false }])
   })
 })

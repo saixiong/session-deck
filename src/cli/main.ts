@@ -3,8 +3,15 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { runClaude } from '../analyze/ClaudeCli'
 import { BoardStore } from '../store/BoardStore'
-import { itemsOf, KIND_LABELS, promptForItems } from '../shared/board'
-import type { BoardItemKind } from '../shared/board'
+import {
+  BOARD_KINDS,
+  compareBoardSessions,
+  isBoardItemKind,
+  itemsOf,
+  KIND_LABELS,
+  orderItems,
+  promptForItems,
+} from '../shared/board'
 import { promptForItem } from '../shared/review'
 import { ReviewRunner } from '../analyze/ReviewRunner'
 import { ReviewStore } from '../analyze/ReviewStore'
@@ -282,41 +289,74 @@ async function cmdBoard(e: Env, args: string[]): Promise<number> {
   const json = flag(args, '--json')
   const all = flag(args, '--all')
   const promptFor = option(args, '--prompt')
-  const kind = option(args, '--kind') as BoardItemKind | undefined
+  const kind = option(args, '--kind')
+  // An unrecognised kind silently matched nothing, which reads exactly like
+  // "you have no mechanical work left" — the most misleading answer available.
+  if (kind !== undefined && !isBoardItemKind(kind)) {
+    console.error(`Unknown kind "${kind}". Use one of: ${BOARD_KINDS.join(', ')}.`)
+    return 2
+  }
   const [favorites, reviews, board, indexer] = await Promise.all([
     openFavorites(e),
     openReviews(e),
     openBoard(e),
     openIndex(e),
   ])
+  // Sessions in board order first, then their items — the same two rules the
+  // dashboard applies, from the same shared module, so the skill and the panel
+  // never disagree about what is at the top (B7).
   const rows = favorites
     .listByType('session')
     .flatMap((f) => {
       const review = reviews.get(f.entity_id)
       if (!review) return []
       const entry = indexer.get(f.entity_id)
-      const title = entry && !entry.missing ? resolveTitle(entry) : f.label
-      return itemsOf(review).map((item) => ({
-        sessionId: f.entity_id,
-        title,
-        priority: review.priority,
-        item,
-        state: board.get(f.entity_id, item.id)?.state ?? null,
-      }))
+      return [
+        {
+          sessionId: f.entity_id,
+          title: entry && !entry.missing ? resolveTitle(entry) : f.label,
+          priority: review.priority,
+          lastActiveAt: entry?.lastActiveAt ?? '',
+          review,
+        },
+      ]
     })
+    .sort(compareBoardSessions)
+    .flatMap((s) =>
+      orderItems(itemsOf(s.review)).map((item) => ({
+        sessionId: s.sessionId,
+        title: s.title,
+        priority: s.priority,
+        item,
+        state: board.get(s.sessionId, item.id)?.state ?? null,
+      }))
+    )
     .filter(
       (r) => (all || r.state === null || r.state === 'seeded') && (!kind || r.item.kind === kind)
     )
-    .sort((a, b) => b.priority - a.priority)
   await indexer.dispose()
   board.dispose()
 
   if (promptFor) {
-    const mine = rows.filter((r) => r.sessionId === promptFor || r.sessionId.startsWith(promptFor))
-    if (mine.length === 0) {
+    // A prefix that matches two sessions used to compose one prompt out of
+    // both of their items and hand it to whichever sorted first. Refuse
+    // instead: seeding the wrong session is not a recoverable mistake.
+    const ids = [...new Set(rows.map((r) => r.sessionId))]
+    const exact = ids.filter((id) => id === promptFor)
+    const matches = exact.length ? exact : ids.filter((id) => id.startsWith(promptFor))
+    if (matches.length === 0) {
       console.error(`No open board items for ${promptFor}.`)
       return 1
     }
+    if (matches.length > 1) {
+      console.error(
+        `"${promptFor}" matches ${matches.length} sessions (${matches
+          .map((id) => id.slice(0, 8))
+          .join(', ')}). Give more of the id.`
+      )
+      return 2
+    }
+    const mine = rows.filter((r) => r.sessionId === matches[0])
     const texts = mine.map((r) => r.item.text)
     console.log(texts.length === 1 ? promptForItem('next_step', texts[0]!) : promptForItems(texts))
     return 0
