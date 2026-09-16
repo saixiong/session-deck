@@ -359,6 +359,19 @@ async function cmdBoard(e: Env, args: string[]): Promise<number> {
     const mine = rows.filter((r) => r.sessionId === matches[0])
     const texts = mine.map((r) => r.item.text)
     console.log(texts.length === 1 ? promptForItem('next_step', texts[0]!) : promptForItems(texts))
+    // The dashboard composes a prompt out of rows you ticked; --prompt takes
+    // whatever is open, which can include the things the classification says
+    // are yours. The prompt's own closing paragraph asks the agent to stop at
+    // a forking decision, but that is the agent's judgment — say plainly, on
+    // stderr so a redirected prompt stays clean, which items were yours.
+    const yours = mine.filter((r) => r.item.kind === 'decision' || r.item.kind === 'user_action')
+    if (yours.length) {
+      console.error(
+        `\nNote: ${yours.length} of these ${yours.length === 1 ? 'is' : 'are'} yours, not an agent's:`
+      )
+      for (const r of yours) console.error(`  - ${r.item.text}  (${KIND_LABELS[r.item.kind]})`)
+      console.error('Add --kind mechanical to leave them out.')
+    }
     return 0
   }
   if (json) {

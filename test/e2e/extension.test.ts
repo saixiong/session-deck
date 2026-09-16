@@ -1,9 +1,10 @@
 import * as assert from 'node:assert/strict'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import * as vscode from 'vscode'
 import type { SessionDeckApi } from '../../src/extension'
+import { itemIdOf, itemsOf } from '../../src/shared/board'
 import {
   CLAUDE_PANEL_VIEW_TYPE,
   countClaudePanels,
@@ -31,6 +32,7 @@ async function waitFor<T>(
 const EXT_ID = 'saixiong.session-deck'
 const FIXTURE_PROJECTS = resolve(__dirname, '../../../test/fixtures/claude/projects')
 const FAKE_CLAUDE = resolve(__dirname, '../../../test/fixtures/fake-claude.sh')
+const DAY_MS = 24 * 60 * 60 * 1000
 const A = '11111111-1111-4111-8111-111111111111'
 const B = '22222222-2222-4222-8222-222222222222'
 
@@ -40,6 +42,39 @@ let dataDir: string
 suite('Session Deck — smoke', () => {
   suiteSetup(async () => {
     dataDir = await mkdtemp(join(tmpdir(), 'session-deck-e2e-'))
+    // Written before the extension is activated, so activation is what prunes
+    // it (B3.2). One expired seeded row for a session nobody stars, one fresh
+    // seeded row, and one decision that must outlive both.
+    const old = new Date(Date.now() - 60 * DAY_MS).toISOString()
+    await writeFile(
+      join(dataDir, 'board.json'),
+      JSON.stringify({
+        version: 1,
+        items: {
+          'gone:expired': {
+            state: 'seeded',
+            text: 'Seeded long ago for a session nobody stars',
+            session_id: 'gone',
+            updated_at: old,
+            seeded_at: old,
+          },
+          'gone:fresh': {
+            state: 'seeded',
+            text: 'Seeded just now',
+            session_id: 'gone',
+            updated_at: new Date().toISOString(),
+            seeded_at: new Date().toISOString(),
+          },
+          'gone:decided': {
+            state: 'dismissed',
+            text: 'A decision is kept however old it is',
+            session_id: 'gone',
+            updated_at: old,
+            seeded_at: null,
+          },
+        },
+      })
+    )
     const config = vscode.workspace.getConfiguration('sessionDeck')
     await config.update('claudeProjectsDir', FIXTURE_PROJECTS, vscode.ConfigurationTarget.Workspace)
     await config.update('dataDir', dataDir, vscode.ConfigurationTarget.Workspace)
@@ -198,6 +233,67 @@ suite('Session Deck — smoke', () => {
       return found.length > 0 ? found : undefined
     })
     assert.equal(deckTabs.length, 1, 'expected exactly one Session Deck tab')
+  })
+
+  test('activation prunes expired seeded board rows and keeps the decisions', async () => {
+    const { board } = api.services
+    await waitFor(() => (board.get('gone', 'expired') === undefined ? true : undefined))
+    assert.equal(board.get('gone', 'expired'), undefined, 'the expired seeded row should be gone')
+    assert.equal(board.get('gone', 'fresh')?.state, 'seeded', 'a fresh seeded row survives')
+    assert.equal(
+      board.get('gone', 'decided')?.state,
+      'dismissed',
+      'a dismissed row is a decision and is kept however old'
+    )
+    // And it is the file that changed, not just the in-memory copy.
+    const raw = JSON.parse(await readFile(join(dataDir, 'board.json'), 'utf8')) as {
+      items: Record<string, unknown>
+    }
+    assert.equal(Object.keys(raw.items).includes('gone:expired'), false)
+  })
+
+  test('board state is keyed by item text and survives a re-analysis', async () => {
+    const { board, reviews } = api.services
+    const review = reviews.get(A)
+    assert.ok(review, 'session A should have a cached report by now')
+    const item = itemsOf(review)[0]
+    assert.ok(item, 'the report should carry at least one classified item')
+    assert.equal(item.kind, 'mechanical')
+    assert.equal(item.id, itemIdOf(item.text), 'the id is derived from the text, not stored')
+
+    await board.setStates([{ sessionId: A, item, state: 'done' }])
+    assert.equal(board.get(A, item.id)?.state, 'done')
+
+    // Re-analyse: the fake CLI returns the same wording, so the tick holds.
+    await api.services.runner.analyze([A], { force: true })
+    const after = itemsOf(reviews.get(A)!)[0]
+    assert.ok(after, 'the re-analysed report should still carry an item')
+    assert.equal(after.id, item.id, 'same wording, same id')
+    assert.equal(board.get(A, after.id)?.state, 'done', 'the tick survived the re-analysis')
+
+    // A reworded item is new work, not an inherited state.
+    assert.equal(board.get(A, itemIdOf(`${item.text} and deploy it`)), undefined)
+    await board.setStates([{ sessionId: A, item, state: null }])
+  })
+
+  test('revealing the Session Deck sidebar opens the dashboard too', async () => {
+    // Close every deck tab first, so what we observe is this reveal opening one.
+    for (const tab of vscode.window.tabGroups.all.flatMap((g) => g.tabs)) {
+      if (tab.label === 'Session Deck') await vscode.window.tabGroups.close(tab)
+    }
+    await waitFor(() =>
+      vscode.window.tabGroups.all.flatMap((g) => g.tabs).some((t) => t.label === 'Session Deck')
+        ? undefined
+        : true
+    )
+    await vscode.commands.executeCommand('workbench.view.extension.sessionDeck')
+    const tabs = await waitFor(() => {
+      const found = vscode.window.tabGroups.all
+        .flatMap((g) => g.tabs)
+        .filter((t) => t.label === 'Session Deck')
+      return found.length > 0 ? found : undefined
+    })
+    assert.equal(tabs.length, 1, 'revealing the sidebar should open exactly one deck tab')
   })
 
   test('an open Claude Code panel is recognised by its tab (viewType + title)', async () => {

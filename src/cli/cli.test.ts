@@ -139,6 +139,42 @@ async function seedReview(
   await store.set(review)
 }
 
+/** Like seedReview, but with a chosen kind per item. */
+async function seedReviewKinds(
+  sessionId: string,
+  entries: Array<[string, 'mechanical' | 'decision' | 'user_action']>
+): Promise<void> {
+  const store = new ReviewStore(join(dataDir, 'reviews'))
+  await store.load()
+  const texts = entries.map(([text]) => text)
+  await store.set({
+    conversation_id: sessionId,
+    title: sessionId,
+    summary: 'seeded',
+    done: [],
+    next_steps: texts,
+    blockers: [],
+    priority: 3,
+    priority_label: 'Medium',
+    priority_reason: 'seeded',
+    completion: 50,
+    completion_reason: 'seeded',
+    items: reconcileItems(
+      texts,
+      [],
+      entries.map(([text, kind]) => ({ text, kind }))
+    ),
+    options: [{ id: 'o', label: 'Go', description: 'd', prompt: 'p' }],
+    model: 'haiku',
+    analyzed_at: new Date().toISOString(),
+    fingerprint: 'seeded',
+    message_count: 1,
+    cost_usd: 0,
+    duration_ms: 0,
+    error: null,
+  })
+}
+
 interface BoardJsonRow {
   session_id: string
   text: string
@@ -213,5 +249,30 @@ describe('session-deck board', () => {
     expect(await main(['board', '--prompt', 'shared-'])).toBe(2)
     expect(err.join('\n')).toMatch(/matches 2 sessions/)
     expect(await main(['board', '--prompt', 'nothing-like-this'])).toBe(1)
+  })
+
+  it('--prompt names the items that are the user s, and --kind can leave them out', async () => {
+    const favorites = new FavoritesStore(join(dataDir, 'favorites.json'))
+    await favorites.load()
+    await favorites.add({ entityType: 'session', entityId: 'mixed', label: 'Mixed' })
+    await seedReviewKinds('mixed', [
+      ['Merge the PR', 'mechanical'],
+      ['Decide whether to cut 0.4.0', 'decision'],
+      ['Push your own commits', 'user_action'],
+    ])
+
+    expect(await main(['board', '--prompt', 'mixed'])).toBe(0)
+    expect(out.at(-1)).toContain('Decide whether to cut 0.4.0')
+    const notes = err.join('\n')
+    expect(notes).toMatch(/2 of these are yours/)
+    expect(notes).toContain('Decide whether to cut 0.4.0  (Decision)')
+    expect(notes).toContain('Push your own commits  (Yours)')
+
+    // Asked for only the mechanical work, there is nothing to warn about.
+    err = []
+    expect(await main(['board', '--prompt', 'mixed', '--kind', 'mechanical'])).toBe(0)
+    expect(out.at(-1)).toContain('Merge the PR')
+    expect(out.at(-1)).not.toContain('Decide whether')
+    expect(err.join('\n')).not.toMatch(/yours/)
   })
 })
