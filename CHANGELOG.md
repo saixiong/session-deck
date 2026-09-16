@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- Fixed: with the Review modal open, typing in another Claude Code session pulled the caret out of
+  its composer. The dialog restored focus from an effect whose dependency list contained a handler
+  that was a new function on every render, so every state push — and a push follows every keystroke
+  in any indexed session — fired the restore. It now restores focus on close only, and only when
+  the webview still has it.
+- The Session Deck sidebar now opens the dashboard tab too (`sessionDeck.openDashboardWithSidebar`,
+  on by default); the sidebar keeps the focus.
+- Board: `board.json` is now actually pruned on load, as documented. `session-deck board` prints the
+  same order as the dashboard (it sorted by priority alone before, with no recency tiebreak and no
+  blockers-first rule), refuses an unknown `--kind` instead of returning an empty board, and refuses
+  a `--prompt` prefix that matches more than one session instead of composing one prompt out of
+  several sessions' items. An item that appears in both a session's to-do and blocked lists is one
+  row, now tagged as the blocker. The Board's empty state tells apart "nothing starred",
+  "starred but not reviewed" (with the Analyse button) and "everything closed".
 - **Deck Board** ([docs/SPEC_BOARD.md](docs/SPEC_BOARD.md)): a `Favorites ⇄ Board` switch in the
   dashboard showing every outstanding to-do and blocker across every starred session, each
   classified `mechanical` / `decision` / `user_action` by the review that already runs (no extra

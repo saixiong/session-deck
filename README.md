@@ -29,7 +29,15 @@ Session Deck is an independent project and is not affiliated with Anthropic.
   obvious way to do it), **decision** (a human choice that changes what gets built), **yours**
   (only you can do it), or **needs triage** (the classification did not survive). Filter by kind,
   tick items off, and select any number — across sessions — to seed them back into their own
-  sessions, one click per session, still typed and never sent.
+  sessions, one click per session, still typed and never sent. `session-deck board` prints the same
+  queue in the terminal.
+
+  The tags come from the review that already ran, so they cost no extra model call — and they are a
+  model's judgment, not a permission system. Nothing on the Board acts on its own: there are no
+  timers and no background runs, and an item is only ever shown to you or seeded into a composer
+  you then read. What you tick off lives in `~/.session-deck/board.json`, keyed by the item's text,
+  so it survives a re-analysis that did not reword it; an item that comes back reworded honestly
+  reappears as new work rather than inheriting a state it never earned.
 
 ![Review](media/screenshot-review.png)
 
@@ -83,6 +91,7 @@ opens in the Claude Code panel; one from another repository opens a new window o
 | `sessionDeck.showSdkSessions`  | `false`              | list `sdk-cli` sessions                               |
 | `sessionDeck.openTarget`       | `panel`              | `panel` \| `window` \| `terminal`                     |
 | `sessionDeck.openInFocusView`  | `false`              | toggle Claude Code's Focus view after opening         |
+| `sessionDeck.openDashboardWithSidebar` | `true`       | open the dashboard tab when the sidebar is opened     |
 | `sessionDeck.indexLargeFilesMB`| `512`                | larger transcripts are indexed head+tail only         |
 
 ## Develop
