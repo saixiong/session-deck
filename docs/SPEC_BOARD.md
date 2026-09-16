@@ -219,6 +219,10 @@ transient list of clicks, not a fact about the world.
 
 ## B8. Phases
 
+**Status, 2026-09-16: B0–B4 built, audited and E2E-green.** The audit's findings and their fixes
+are in the git history (`fix(board): audit fixes for B1-B4`); §B3.1 was corrected by it. What
+remains unbuilt is everything below the line, and deliberately so — see §B9.
+
 | Phase | Deliverable | Done when |
 |---|---|---|
 | **B0** | This spec | Decisions locked (done) |
