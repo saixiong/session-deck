@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Review card: every "Still to do" and "Blocked on" item has an **Ignore** button that hides it
+  (and **Show N ignored** / **Unignore** to bring it back). The state is the Board's `dismissed`
+  in `~/.session-deck/board.json`, so ignoring on the card dismisses on the Board and vice
+  versa, and an item marked done on the Board is hidden on the card too. Items keep their
+  bullets and get more breathing room; **Do this** / **Fix this** are the primary (accent)
+  action, on the Board as well.
 - Fixed: with the Review modal open, typing in another Claude Code session pulled the caret out of
   its composer. The dialog restored focus from an effect whose dependency list contained a handler
   that was a new function on every render, so every state push — and a push follows every keystroke

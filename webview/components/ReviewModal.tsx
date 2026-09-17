@@ -9,6 +9,8 @@ import type {
   ReviewStatus,
 } from '../../src/shared/review'
 import { promptForItem } from '../../src/shared/review'
+import type { BoardItemState } from '../../src/shared/board'
+import { boardKey, itemIdOf } from '../../src/shared/board'
 import { post } from '../vscodeApi'
 import { Modal } from './Modal'
 
@@ -141,7 +143,7 @@ export function ReviewModal({ group, review, focus, onClose }: Props) {
         ) : (
           rows.map((row) =>
             row.review ? (
-              <ReviewCard key={row.id} row={row} />
+              <ReviewCard key={row.id} row={row} itemStates={review.itemStates} />
             ) : (
               <UnreviewedCard key={row.id} row={row} running={running} />
             )
@@ -265,7 +267,7 @@ function statusIcon(status: ReviewStatus | undefined): string {
   }
 }
 
-function ReviewCard({ row }: { row: Row }) {
+function ReviewCard({ row, itemStates }: { row: Row; itemStates: ReviewState['itemStates'] }) {
   const r = row.review!
   const [choice, setChoice] = useState<string>(r.options[0]?.id ?? '')
   const chosen = r.options.find((o) => o.id === choice)
@@ -312,6 +314,8 @@ function ReviewCard({ row }: { row: Row }) {
           icon="circle-large-outline"
           empty="Nothing outstanding."
           action={{ kind: 'next_step', label: 'Do this', onPick: open }}
+          sessionId={row.id}
+          itemStates={itemStates}
         />
         <List
           title="Blocked on"
@@ -319,6 +323,8 @@ function ReviewCard({ row }: { row: Row }) {
           icon="warning"
           empty="No blockers."
           action={{ kind: 'blocker', label: 'Fix this', onPick: open }}
+          sessionId={row.id}
+          itemStates={itemStates}
         />
       </div>
       {r.options.length ? (
@@ -508,40 +514,109 @@ function List({
   icon,
   empty,
   action,
+  sessionId,
+  itemStates,
 }: {
   title: string
   items: string[]
   icon: string
   empty: string
   action?: ListAction
+  sessionId?: string
+  itemStates?: ReviewState['itemStates']
 }) {
+  // Ignored (and finished) items leave the default view but stay one click
+  // away: the state is the Board's, written to board.json, so ignoring here
+  // dismisses there and vice versa. Nothing is deleted from the report.
+  const [showIgnored, setShowIgnored] = useState(false)
+  const stateOf = (text: string): BoardItemState | null =>
+    sessionId && itemStates ? (itemStates[boardKey(sessionId, itemIdOf(text))] ?? null) : null
+  const setState = (text: string, state: BoardItemState | null) => {
+    if (!sessionId) return
+    post({
+      type: 'boardSetState',
+      items: [{ sessionId, itemId: itemIdOf(text), text }],
+      state,
+    })
+  }
+  const rows = items.map((text) => ({ text, state: stateOf(text) }))
+  const hidden = rows.filter((r) => r.state === 'dismissed' || r.state === 'done')
+  const shown = showIgnored ? rows : rows.filter((r) => !hidden.includes(r))
   return (
     <section class="rlist">
       <h4 class="rlist__title">
         <span class={`codicon codicon-${icon}`} aria-hidden="true" /> {title}
       </h4>
-      {items.length ? (
+      {shown.length ? (
         <ul class={`rlist__items${action ? ' rlist__items--actionable' : ''}`}>
-          {items.map((it, i) => (
-            <li key={i}>
-              <span class="rlist__text">{it}</span>
-              {action ? (
-                <button
-                  class="rlist__act"
-                  type="button"
-                  title={`Open the session with a prompt to ${action.kind === 'blocker' ? 'resolve this blocker' : 'do this step'} — not sent`}
-                  aria-label={`${action.label}: ${it}`}
-                  onClick={() => action.onPick(promptForItem(action.kind, it))}
-                >
-                  <span class="codicon codicon-arrow-right" aria-hidden="true" /> {action.label}
-                </button>
-              ) : null}
-            </li>
-          ))}
+          {shown.map(({ text, state }) => {
+            const closed = state === 'dismissed' || state === 'done'
+            return (
+              <li key={text} class={closed ? 'rlist__item--closed' : undefined}>
+                <div class="rlist__row">
+                  <span class="rlist__text">
+                    {text}
+                    {closed ? (
+                      <span class="rlist__state muted">
+                        {state === 'done' ? 'done' : 'ignored'}
+                      </span>
+                    ) : null}
+                  </span>
+                  {action && !closed ? (
+                    <button
+                      class="rlist__act rlist__act--primary"
+                      type="button"
+                      title={`Open the session with a prompt to ${action.kind === 'blocker' ? 'resolve this blocker' : 'do this step'} — not sent`}
+                      aria-label={`${action.label}: ${text}`}
+                      onClick={() => action.onPick(promptForItem(action.kind, text))}
+                    >
+                      <span class="codicon codicon-arrow-right" aria-hidden="true" /> {action.label}
+                    </button>
+                  ) : null}
+                  {action && sessionId ? (
+                    closed ? (
+                      <button
+                        class="rlist__act"
+                        type="button"
+                        title="Show this item again"
+                        aria-label={`${state === 'done' ? 'Reopen' : 'Unignore'}: ${text}`}
+                        onClick={() => setState(text, null)}
+                      >
+                        <span class="codicon codicon-history" aria-hidden="true" />{' '}
+                        {state === 'done' ? 'Reopen' : 'Unignore'}
+                      </button>
+                    ) : (
+                      <button
+                        class="rlist__act"
+                        type="button"
+                        title="Hide this item — it stays in the report and on the Board's Show done list"
+                        aria-label={`Ignore: ${text}`}
+                        onClick={() => setState(text, 'dismissed')}
+                      >
+                        <span class="codicon codicon-eye-closed" aria-hidden="true" /> Ignore
+                      </button>
+                    )
+                  ) : null}
+                </div>
+              </li>
+            )
+          })}
         </ul>
       ) : (
-        <p class="muted rlist__empty">{empty}</p>
+        <p class="muted rlist__empty">
+          {items.length && hidden.length === items.length ? 'Everything here is ignored.' : empty}
+        </p>
       )}
+      {hidden.length ? (
+        <button
+          class="linkish rlist__toggle"
+          type="button"
+          aria-pressed={showIgnored}
+          onClick={() => setShowIgnored((v) => !v)}
+        >
+          {showIgnored ? 'Hide' : 'Show'} {hidden.length} ignored
+        </button>
+      ) : null}
     </section>
   )
 }

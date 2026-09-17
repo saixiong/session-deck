@@ -22,7 +22,9 @@ Session Deck is an independent project and is not affiliated with Anthropic.
   session with that prompt **typed into the composer, never sent**. The prompt is also copied to
   the clipboard every time: when the session's tab is already open, Claude Code cannot seed its
   composer, so Session Deck focuses it and you press ⌘V. Reports are cached until the session
-  moves on; the score also shows as a badge on each favorite card.
+  moves on; the score also shows as a badge on each favorite card. **Ignore** hides an item you
+  will not act on (**Show ignored** brings it back) — it is the same state the Board calls
+  dismissed, kept in `~/.session-deck/board.json`, never a change to the report.
 
 - **Board** — the `Board` switch in the header flattens every outstanding to-do and blocker from
   every starred session into one list, each tagged by what kind of work it is: **mechanical** (one

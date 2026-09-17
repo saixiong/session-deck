@@ -69,6 +69,13 @@ export interface ReviewState {
   /** Sessions the modal lists beyond favorites (e.g. reviewed from the tree — Q2), with their cards. */
   extraIds: string[]
   extraCards: Record<string, FavoriteCard>
+  /**
+   * Board state for every item of every listed report, keyed by
+   * `boardKey(sessionId, itemIdOf(text))`. Lets a card hide what you have
+   * ignored or finished without a second store: the Board and the card are
+   * two views of one file (SPEC_BOARD B3.2).
+   */
+  itemStates: Record<string, BoardItemState>
   model: string
   cli: { found: boolean; path: string | null; source: string | null }
 }

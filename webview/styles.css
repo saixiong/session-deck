@@ -1181,13 +1181,19 @@ body.vscode-high-contrast-light .modal {
   padding-left: 18px;
 }
 
-.rlist__items li + li {
-  margin-top: 2px;
+.rlist__items li {
+  padding: 3px 0;
 }
 
-/* "Still to do" / "Blocked on" rows: text plus a per-item action that opens
-   the session with a prompt for just that item. */
-.rlist__items--actionable li {
+.rlist__items li + li {
+  margin-top: 6px;
+}
+
+/* "Still to do" / "Blocked on" rows: text plus per-item actions. The flex
+   container is a child of the <li>, not the <li> itself — a flex <li> stops
+   being a list-item and loses its bullet, which is exactly what made these
+   two lists look different from "Done". */
+.rlist__row {
   display: flex;
   align-items: flex-start;
   gap: 8px;
@@ -1196,6 +1202,24 @@ body.vscode-high-contrast-light .modal {
 .rlist__text {
   flex: 1 1 auto;
   min-width: 0;
+  padding-top: 1px;
+}
+
+.rlist__item--closed .rlist__text {
+  text-decoration: line-through;
+  color: var(--vscode-descriptionForeground);
+}
+
+.rlist__state {
+  margin-left: 6px;
+  font-size: 0.85em;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.rlist__toggle {
+  margin-top: 6px;
+  font-size: 0.85em;
 }
 
 .rlist__act {
@@ -1221,6 +1245,19 @@ body.vscode-high-contrast-light .modal {
   opacity: 1;
   background: var(--vscode-toolbar-hoverBackground, var(--deck-border));
   outline: none;
+}
+
+.rlist__act--primary {
+  opacity: 1;
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  border-color: var(--vscode-button-border, transparent);
+}
+
+.rlist__act--primary:hover,
+.rlist__act--primary:focus-visible {
+  background: var(--vscode-button-hoverBackground);
+  color: var(--vscode-button-foreground);
 }
 
 .rlist__act .codicon {
@@ -1571,6 +1608,18 @@ body.vscode-high-contrast-light .modal {
   color: var(--vscode-textLink-foreground);
   cursor: pointer;
   white-space: nowrap;
+}
+
+.bitem__act--primary {
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  border-color: var(--vscode-button-border, transparent);
+}
+
+.bitem__act--primary:hover,
+.bitem__act--primary:focus-visible {
+  background: var(--vscode-button-hoverBackground);
+  color: var(--vscode-button-foreground);
 }
 
 .bitem__act:hover,

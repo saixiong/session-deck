@@ -3,7 +3,13 @@ import { isVisibleEntry } from '../../index/createIndexer'
 import { computeStats, formatCount, isPeriod } from '../../index/stats'
 import { MAX_REVIEW_IDS } from '../../analyze/ReviewRunner'
 import { resolveTitle } from '../../index/records'
-import { compareBoardSessions, itemsOf, orderItems, promptForItems } from '../../shared/board'
+import {
+  boardKey,
+  compareBoardSessions,
+  itemsOf,
+  orderItems,
+  promptForItems,
+} from '../../shared/board'
 import { promptForItem } from '../../shared/review'
 import { buildFavoriteGroups } from '../../registry/favoritesView'
 import { projectLabel } from '../../registry/sessionResolver'
@@ -512,11 +518,16 @@ export class DashboardPanel {
     const { reviews, runner, indexer } = this.services
     const wanted = new Set([...favoritedIds, ...this.extraReviewIds])
     const out: DashboardState['review']['reviews'] = {}
+    const itemStates: DashboardState['review']['itemStates'] = {}
     for (const review of reviews.all()) {
       if (!wanted.has(review.conversation_id)) continue
       out[review.conversation_id] = {
         ...review,
         stale: runner.isStale(review, indexer.get(review.conversation_id)),
+      }
+      for (const item of itemsOf(review)) {
+        const entry = this.services.board.get(review.conversation_id, item.id)
+        if (entry) itemStates[boardKey(review.conversation_id, item.id)] = entry.state
       }
     }
     if (Date.now() - this.cliProbe.at > CLI_PROBE_TTL_MS) {
@@ -528,6 +539,7 @@ export class DashboardPanel {
       batch: runner.current(),
       extraIds: [...this.extraReviewIds],
       extraCards: Object.fromEntries(this.services.sessions.hydrate([...this.extraReviewIds])),
+      itemStates,
       model: vscode.workspace.getConfiguration('sessionDeck').get<string>('model', 'sonnet'),
       cli: { found: cli !== undefined, path: cli?.path ?? null, source: cli?.source ?? null },
     }
