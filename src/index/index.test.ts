@@ -280,6 +280,10 @@ describe('live sessions', () => {
     expect(live.map((l) => l.sessionId)).toEqual(['live-1'])
     expect(live[0]?.name).toBe('demo-56')
     expect(parseLiveSession('{"pid":"x"}')).toBeUndefined()
+    // `status` is what the opener checks before recycling a panel; a record
+    // that predates the field reads as empty, never as busy.
+    expect(parseLiveSession('{"pid":1,"sessionId":"s","status":"busy"}')?.status).toBe('busy')
+    expect(parseLiveSession('{"pid":1,"sessionId":"s"}')?.status).toBe('')
     expect(await readLiveSessions(join(root, 'missing'))).toEqual([])
   })
 

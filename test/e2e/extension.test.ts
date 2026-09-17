@@ -8,6 +8,7 @@ import { itemIdOf, itemsOf } from '../../src/shared/board'
 import {
   CLAUDE_PANEL_VIEW_TYPE,
   countClaudePanels,
+  findPanelTab,
   isPanelOpen,
 } from '../../src/open/SessionOpener'
 
@@ -317,6 +318,23 @@ suite('Session Deck — smoke', () => {
       assert.equal(isPanelOpen('Fix login bug and ship'), true)
       assert.equal(isPanelOpen('  Fix login bug   and ship '), true, 'whitespace-insensitive')
       assert.equal(isPanelOpen('Some other session'), false)
+      // Recycling needs the tab itself, and its column — and must refuse
+      // when two panels carry the same label, since a label is all it has.
+      const found = findPanelTab('Fix login bug and ship')
+      assert.ok(found !== undefined && found !== 'ambiguous', 'exactly one tab expected')
+      assert.equal(found.group.viewColumn, panel.viewColumn)
+      const twin = vscode.window.createWebviewPanel(
+        'claudeVSCodePanel',
+        'Fix login bug and ship',
+        vscode.ViewColumn.Beside
+      )
+      try {
+        await waitFor(() => (countClaudePanels() > before + 1 ? true : undefined))
+        assert.equal(findPanelTab('Fix login bug and ship'), 'ambiguous')
+        assert.equal(isPanelOpen('Fix login bug and ship'), true, 'still counts as open')
+      } finally {
+        twin.dispose()
+      }
     } finally {
       panel.dispose()
     }

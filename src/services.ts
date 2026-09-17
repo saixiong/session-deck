@@ -57,7 +57,12 @@ export class Services implements vscode.Disposable {
     this.output = vscode.window.createOutputChannel('Session Deck')
     this.settingsSnapshot = readIndexerSettings()
     this.indexerInstance = this.boot(createIndexer(context, this.output))
-    this.opener = new SessionOpener(this.output)
+    this.opener = new SessionOpener(this.output, {
+      // Read fresh, not from the 5 s cache: this decides whether a panel is
+      // closed, and "busy" can begin between two dashboard pushes.
+      liveStatus: async (id) =>
+        (await this.indexerInstance.liveSessions()).find((l) => l.sessionId === id)?.status,
+    })
 
     const dataDir = expandHome(
       vscode.workspace.getConfiguration('sessionDeck').get<string>('dataDir', '~/.session-deck')
