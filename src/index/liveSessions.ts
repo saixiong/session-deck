@@ -15,6 +15,12 @@ export interface LiveSession {
   kind: string
   startedAt: number
   updatedAt: number
+  /**
+   * Claude Code's own word for what the process is doing: `busy` while a turn
+   * runs, `idle` between turns, empty when the file predates the field. The
+   * opener refuses to recycle a panel whose session is busy.
+   */
+  status: string
 }
 
 export function isProcessAlive(
@@ -54,6 +60,7 @@ export function parseLiveSession(raw: string): LiveSession | undefined {
     kind: s('kind'),
     startedAt: n('startedAt'),
     updatedAt: n('updatedAt'),
+    status: s('status'),
   }
 }
 

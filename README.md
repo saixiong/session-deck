@@ -19,10 +19,13 @@ Session Deck is an independent project and is not affiliated with Anthropic.
   what is done, what is still to do, what it is blocked on, a priority (1–5), a **completion
   score** (0–100, judged against the session's own goal), and two to four directions. Choosing a
   direction — or the **Do this** / **Fix this** button on any single to-do or blocker — opens the
-  session with that prompt **typed into the composer, never sent**. The prompt is also copied to
-  the clipboard every time: when the session's tab is already open, Claude Code cannot seed its
-  composer, so Session Deck focuses it and you press ⌘V. Reports are cached until the session
-  moves on; the score also shows as a badge on each favorite card.
+  session with that prompt **typed into the composer, never sent**. If that session's tab is
+  already open, Session Deck closes and reopens it in place with the prompt seeded (Claude Code
+  cannot seed an open composer) — unless the session is mid-turn, in which case the tab is left
+  alone and the prompt, which is copied to the clipboard every time, is a ⌘V away. Reports are
+  cached until the session moves on; the score also shows as a badge on each favorite card. **Ignore** hides an item you
+  will not act on (**Show ignored** brings it back) — it is the same state the Board calls
+  dismissed, kept in `~/.session-deck/board.json`, never a change to the report.
 
 - **Board** — the `Board` switch in the header flattens every outstanding to-do and blocker from
   every starred session into one list, each tagged by what kind of work it is: **mechanical** (one

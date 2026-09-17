@@ -262,7 +262,7 @@ function BoardItemRow({
       {row.state ? <span class="bitem__state muted">{row.state}</span> : null}
       <span class="bitem__actions">
         <button
-          class="bitem__act"
+          class="bitem__act bitem__act--primary"
           type="button"
           title="Open the session with a prompt for this item — not sent"
           aria-label={`Do this: ${row.item.text}`}

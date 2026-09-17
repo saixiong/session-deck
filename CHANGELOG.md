@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- **Do this / Fix this / Take this direction now land in an already-open session's composer.**
+  Claude Code refuses to seed a panel that is open ("Session is already open. Your prompt was not
+  applied") and has no API to set its input, so Session Deck recycles the tab: close, reopen in the
+  same column with the prompt. It will not do that to a session whose live record says `busy`
+  (a turn is running) or when two tabs share the title — those keep the clipboard fallback. A
+  draft sitting in that composer is lost by the recycle.
+- Review card: every "Still to do" and "Blocked on" item has an **Ignore** button that hides it
+  (and **Show N ignored** / **Unignore** to bring it back). The state is the Board's `dismissed`
+  in `~/.session-deck/board.json`, so ignoring on the card dismisses on the Board and vice
+  versa, and an item marked done on the Board is hidden on the card too. Items keep their
+  bullets and get more breathing room; **Do this** / **Fix this** are the primary (accent)
+  action, on the Board as well.
 - Fixed: with the Review modal open, typing in another Claude Code session pulled the caret out of
   its composer. The dialog restored focus from an effect whose dependency list contained a handler
   that was a new function on every render, so every state push — and a push follows every keystroke

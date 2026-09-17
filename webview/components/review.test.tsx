@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/pre
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FavoriteCard, FavoriteGroup, FavoriteItem } from '../../src/shared/cards'
 import type { ReviewState } from '../../src/shared/messages'
-import { reconcileItems } from '../../src/shared/board'
+import { boardKey, itemIdOf, reconcileItems } from '../../src/shared/board'
 import type { BatchProgress, ChatReview } from '../../src/shared/review'
 import { posted } from '../test/setup'
 import { ReviewModal } from './ReviewModal'
@@ -82,6 +82,7 @@ const state = (overrides: Partial<ReviewState> = {}): ReviewState => ({
   batch: null,
   extraIds: [],
   extraCards: {},
+  itemStates: {},
   model: 'sonnet',
   cli: { found: true, path: '/x/claude', source: 'path' },
   ...overrides,
@@ -196,6 +197,104 @@ describe('ReviewModal', () => {
     )
     // "Done" items are not actionable.
     expect(screen.queryByRole('button', { name: /did a thing/ })).toBeNull()
+  })
+
+  it('"Still to do" and "Blocked on" items are real list items with bullets, and Do this is the primary action', () => {
+    render(
+      <ReviewModal
+        group={group([item('a', 'A')])}
+        review={state({
+          reviews: { a: review('a', 4, { next_steps: ['Merge PR #42'], blockers: ['CI is red'] }) },
+        })}
+        focus={null}
+        onClose={() => undefined}
+      />
+    )
+    // A flex <li> stops being a list-item and loses its marker; the flex row
+    // must therefore be a child of the <li>, which is what these assert.
+    const lis = document.querySelectorAll('.rlist__items--actionable li')
+    expect(lis).toHaveLength(2)
+    for (const li of lis) {
+      expect(li.classList.contains('rlist__row')).toBe(false)
+      expect(li.querySelector(':scope > .rlist__row')).toBeTruthy()
+    }
+    expect(screen.getByRole('button', { name: 'Do this: Merge PR #42' }).className).toContain(
+      'rlist__act--primary'
+    )
+    expect(screen.getByRole('button', { name: 'Ignore: Merge PR #42' }).className).not.toContain(
+      'rlist__act--primary'
+    )
+  })
+
+  it('Ignore hides an item through the Board store; Show ignored brings it back with Unignore', () => {
+    const steps = ['Merge PR #42', 'Update the changelog']
+    const { rerender } = render(
+      <ReviewModal
+        group={group([item('a', 'A')])}
+        review={state({ reviews: { a: review('a', 4, { next_steps: steps, blockers: [] }) } })}
+        focus={null}
+        onClose={() => undefined}
+      />
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Ignore: Merge PR #42' }))
+    expect(posted).toEqual([
+      {
+        type: 'boardSetState',
+        items: [{ sessionId: 'a', itemId: itemIdOf('Merge PR #42'), text: 'Merge PR #42' }],
+        state: 'dismissed',
+      },
+    ])
+
+    // The host answers with the state; the item leaves the default view.
+    const ignored = { [boardKey('a', itemIdOf('Merge PR #42'))]: 'dismissed' as const }
+    rerender(
+      <ReviewModal
+        group={group([item('a', 'A')])}
+        review={state({
+          reviews: { a: review('a', 4, { next_steps: steps, blockers: [] }) },
+          itemStates: ignored,
+        })}
+        focus={null}
+        onClose={() => undefined}
+      />
+    )
+    expect(screen.queryByText('Merge PR #42')).toBeNull()
+    expect(screen.getByText('Update the changelog')).toBeTruthy()
+    // Only "Still to do" has anything ignored; "Blocked on" gets no toggle.
+    const toggles = screen.getAllByRole('button', { name: /Show 1 ignored/ })
+    expect(toggles).toHaveLength(1)
+
+    fireEvent.click(toggles[0]!)
+    expect(screen.getByText('Merge PR #42')).toBeTruthy()
+    expect(screen.getByText('ignored')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Do this: Merge PR #42' })).toBeNull()
+    posted.length = 0
+    fireEvent.click(screen.getByRole('button', { name: 'Unignore: Merge PR #42' }))
+    expect(posted).toEqual([
+      {
+        type: 'boardSetState',
+        items: [{ sessionId: 'a', itemId: itemIdOf('Merge PR #42'), text: 'Merge PR #42' }],
+        state: null,
+      },
+    ])
+  })
+
+  it('an item marked done on the Board is hidden here too, and comes back with Reopen', () => {
+    render(
+      <ReviewModal
+        group={group([item('a', 'A')])}
+        review={state({
+          reviews: { a: review('a', 4, { next_steps: ['Merge PR #42'], blockers: [] }) },
+          itemStates: { [boardKey('a', itemIdOf('Merge PR #42'))]: 'done' },
+        })}
+        focus={null}
+        onClose={() => undefined}
+      />
+    )
+    expect(screen.getByText('Everything here is ignored.')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /Show 1 ignored/ }))
+    expect(screen.getByText('done')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Reopen: Merge PR #42' })).toBeTruthy()
   })
 
   it('Analyse sends the pending ids; the unreviewed card sends its own id forced', () => {
