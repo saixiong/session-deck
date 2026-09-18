@@ -41,6 +41,8 @@ export class BoardStore {
   private watcher: FSWatcher | undefined
   private reloadTimer: NodeJS.Timeout | undefined
   private lastWritten = ''
+  /** Bumped by every save; a reload that overlapped one discards what it read. */
+  private writeGeneration = 0
   private loaded = false
 
   constructor(readonly path: string) {}
@@ -160,6 +162,7 @@ export class BoardStore {
   private async save(): Promise<void> {
     const file: BoardFile = { version: 1, items: this.items }
     const json = `${JSON.stringify(file, null, 2)}\n`
+    this.writeGeneration++
     this.lastWritten = json
     await mkdir(dirname(this.path), { recursive: true })
     await writeFileAtomic(this.path, json)
@@ -167,12 +170,19 @@ export class BoardStore {
   }
 
   private async reloadIfChanged(): Promise<void> {
+    // A reload is only trustworthy if no save ran while the file was being
+    // read. Otherwise the bytes on disk can predate the write we just made
+    // and, since they no longer match `lastWritten`, would be adopted —
+    // silently undoing the write. The save's own change event brings the
+    // watcher back for a clean read.
+    const generation = this.writeGeneration
     let raw = ''
     try {
       raw = await readFile(this.path, 'utf8')
     } catch {
       raw = ''
     }
+    if (generation !== this.writeGeneration) return
     if (raw === this.lastWritten) return
     this.items = parseBoard(raw)
     this.emit()
