@@ -31,8 +31,10 @@ Session Deck is an independent project and is not affiliated with Anthropic.
   the Board, and a **Matches** shelf listing every other session that fits, so a query reaches the
   hundreds of sessions no shelf shows. The magnifier on the sidebar runs the same matcher over the
   tree. Words are ANDed against a session's title, prompts, last-reply preview, project, branches
-  and PRs (`#42`) — what the index already knows; a word buried mid-transcript is not found yet
-  (that is [SPEC_SEARCH](docs/SPEC_SEARCH.md) stage 2).
+  and PRs (`#42`), and against the **transcript itself**: what you and Claude actually said, kept
+  as plain text in the extension's own storage and brought up to date behind the index. A session
+  found only that way says **matched in transcript** with a snippet of where. Details in
+  [SPEC_SEARCH](docs/SPEC_SEARCH.md).
 
 - **Board** — the `Board` switch in the header flattens every outstanding to-do and blocker from
   every starred session into one list, each tagged by what kind of work it is: **mechanical** (one

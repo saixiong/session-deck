@@ -1,6 +1,6 @@
 import * as vscode from 'vscode'
 import { resolveTitle } from '../../index/records'
-import { matchesQuery, matchesTexts, normaliseQuery } from '../../index/search'
+import { matchSession, matchesTexts, normaliseQuery } from '../../index/search'
 import type { SessionIndexEntry } from '../../index/types'
 import { projectLabel } from '../../registry/sessionResolver'
 import type { Services } from '../../services'
@@ -104,7 +104,15 @@ export class SessionTreeProvider implements vscode.TreeDataProvider<TreeNode>, v
     fallback: ReadonlyArray<string | null | undefined>
   ): boolean {
     if (!this.filtering) return true
-    return entry ? matchesQuery(entry, this.words) : matchesTexts(fallback, this.words)
+    return entry
+      ? matchSession(entry, this.words, this.services.content).hit
+      : matchesTexts(fallback, this.words)
+  }
+
+  /** While filtering: did a word reach this session only through its transcript (S6)? */
+  private matchedInContent(entry: SessionIndexEntry | undefined): boolean {
+    if (!this.filtering || !entry) return false
+    return matchSession(entry, this.words, this.services.content).viaContent.length > 0
   }
 
   showMore(key: string): void {
@@ -350,6 +358,7 @@ export class SessionTreeProvider implements vscode.TreeDataProvider<TreeNode>, v
     } else {
       parts.push('no longer on disk')
     }
+    if (this.matchedInContent(entry)) parts.push('matched in transcript')
     item.description = parts.filter(Boolean).join(' · ')
     item.iconPath = new vscode.ThemeIcon(
       missing ? 'warning' : node.live ? 'pulse' : starred ? 'star-full' : 'comment-discussion',

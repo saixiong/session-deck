@@ -12,6 +12,7 @@ import {
   readIndexerSettings,
   type IndexerSettings,
 } from './index/createIndexer'
+import { ContentIndex } from './index/ContentIndex'
 import type { LiveSession } from './index/liveSessions'
 import type { SessionIndexer } from './index/SessionIndexer'
 import { SessionOpener } from './open/SessionOpener'
@@ -40,6 +41,10 @@ export class Services implements vscode.Disposable {
   readonly opener: SessionOpener
   readonly reviews: ReviewStore
   readonly runner: ReviewRunner
+  /** Transcript text for search (SPEC_SEARCH S6); catches up in the background behind the index. */
+  readonly content: ContentIndex
+  private contentTimer: NodeJS.Timeout | undefined
+  private contentReady: Promise<void>
   private indexerInstance: SessionIndexer
   private settingsSnapshot: IndexerSettings
   private readonly indexEmitter = new vscode.EventEmitter<string[]>()
@@ -56,6 +61,15 @@ export class Services implements vscode.Disposable {
   constructor(readonly context: vscode.ExtensionContext) {
     this.output = vscode.window.createOutputChannel('Session Deck')
     this.settingsSnapshot = readIndexerSettings()
+    this.content = new ContentIndex({
+      dir: join(context.globalStorageUri.fsPath, 'content'),
+      log: (m) => this.output.appendLine(`[index] ${m}`),
+    })
+    this.contentReady = this.content
+      .load()
+      .catch((err: unknown) =>
+        this.output.appendLine(`[index] content load failed: ${String(err)}`)
+      )
     this.indexerInstance = this.boot(createIndexer(context, this.output))
     this.opener = new SessionOpener(this.output, {
       // Read fresh, not from the 5 s cache: this decides whether a panel is
@@ -174,9 +188,15 @@ export class Services implements vscode.Disposable {
 
   private boot(indexer: SessionIndexer): SessionIndexer {
     this.unsubscribeIndex?.()
-    this.unsubscribeIndex = indexer.onDidChange((ids) => this.indexEmitter.fire(ids))
+    this.unsubscribeIndex = indexer.onDidChange((ids) => {
+      this.indexEmitter.fire(ids)
+      this.scheduleContentCatchUp()
+    })
     indexer.start().then(
-      () => this.output.appendLine(`[index] ready: ${JSON.stringify(indexer.status())}`),
+      () => {
+        this.output.appendLine(`[index] ready: ${JSON.stringify(indexer.status())}`)
+        this.scheduleContentCatchUp()
+      },
       (err: unknown) => {
         this.output.appendLine(`[index] start failed: ${String(err)}`)
         void vscode.window.showErrorMessage(
@@ -185,6 +205,27 @@ export class Services implements vscode.Disposable {
       }
     )
     return indexer
+  }
+
+  /**
+   * The content index trails the session index: every change it reports
+   * (coalesced, since the full tier reports in bursts) brings the visible
+   * sessions' text up to date, largest last. A push to the dashboard follows
+   * so a search typed during the catch-up sees the new matches.
+   */
+  private scheduleContentCatchUp(): void {
+    if (this.contentTimer) clearTimeout(this.contentTimer)
+    this.contentTimer = setTimeout(() => {
+      this.contentTimer = undefined
+      void this.contentReady.then(async () => {
+        const before = this.content.size
+        const wanted = this.indexerInstance
+          .getAll()
+          .filter((e) => isVisibleEntry(e, this.settingsSnapshot))
+        await this.content.catchUp(wanted)
+        if (this.content.size !== before) this.indexEmitter.fire([])
+      })
+    }, 1000)
   }
 
   private restartIndexer(): void {
@@ -215,6 +256,8 @@ export class Services implements vscode.Disposable {
 
   dispose(): void {
     this.unsubscribeIndex?.()
+    if (this.contentTimer) clearTimeout(this.contentTimer)
+    void this.content.dispose()
     void this.indexerInstance.dispose()
     this.favorites.dispose()
     this.board.dispose()

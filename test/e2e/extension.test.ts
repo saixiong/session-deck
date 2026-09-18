@@ -207,6 +207,38 @@ suite('Session Deck — smoke', () => {
     assert.equal(api.tree.filterQuery, '')
   })
 
+  test('the content index catches up behind the index and a mid-transcript word is found (S6)', async () => {
+    // "Looking at it now." is an assistant message in two fixture sessions
+    // and nowhere in their title, prompts or preview; only the transcript
+    // text can find it. The index trails the session index by a debounce.
+    await waitFor(() => (api.services.content.size >= 3 ? true : undefined), 15000)
+    api.tree.setFilter('looking')
+    try {
+      const roots = await api.tree.getChildren()
+      assert.deepEqual(
+        roots.map((n) => (n.kind === 'section' ? `${n.id}:${n.count}` : n.kind)),
+        ['filter', 'favorites:0', 'live:0', 'recent:2']
+      )
+      const projects = await api.tree.getChildren(roots[3])
+      const rows = await api.tree.getChildren(projects[0])
+      const first = rows[0]
+      assert.ok(first)
+      assert.match(String(api.tree.getTreeItem(first).description), /matched in transcript/)
+      // A word from the title alone does not claim a transcript match.
+      api.tree.setFilter('login')
+      const plainRows = await api.tree.getChildren(
+        (await api.tree.getChildren((await api.tree.getChildren())[3]))[0]
+      )
+      const plain = plainRows[0]
+      assert.ok(plain)
+      assert.doesNotMatch(String(api.tree.getTreeItem(plain).description), /matched in transcript/)
+    } finally {
+      await vscode.commands.executeCommand('sessionDeck.clearTreeFilter')
+    }
+    // The text lives in the extension's own storage, never under ~/.claude (D5).
+    assert.ok(!api.services.content.dir.includes('.claude'))
+  })
+
   test('starring persists to favorites.json, shows in the tree, and is idempotent', async () => {
     await vscode.commands.executeCommand('sessionDeck.favorite', A)
     await vscode.commands.executeCommand('sessionDeck.favorite', A)

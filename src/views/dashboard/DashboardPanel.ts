@@ -3,7 +3,7 @@ import { isVisibleEntry } from '../../index/createIndexer'
 import { computeStats, formatCount, isPeriod } from '../../index/stats'
 import { MAX_REVIEW_IDS } from '../../analyze/ReviewRunner'
 import { resolveTitle } from '../../index/records'
-import { matchesQuery, matchesTexts, normaliseQuery } from '../../index/search'
+import { matchSession, matchesTexts, normaliseQuery } from '../../index/search'
 import {
   boardKey,
   compareBoardSessions,
@@ -352,14 +352,20 @@ export class DashboardPanel {
     const stats = computeStats(visible, live, period)
     const status = indexer.status()
 
-    // One matcher for every list (S1). A favorite whose transcript is gone
-    // matches on its label; a live session with no transcript yet, on its
-    // live name.
+    // One matcher for every list (S1), with the transcript as one more field
+    // (S6). A favorite whose transcript is gone matches on its label; a live
+    // session with no transcript yet, on its live name. Sessions a word only
+    // reached through their text get a snippet on their card.
     const words = normaliseQuery(this.search)
     const searching = words.length > 0
+    const content = this.services.content
+    const viaContent = new Map<string, string>() // sessionId → the word to snippet
     const matchesSession = (id: string, fallback: ReadonlyArray<string | null | undefined>) => {
       const entry = indexer.get(id)
-      return entry && !entry.missing ? matchesQuery(entry, words) : matchesTexts(fallback, words)
+      if (!entry || entry.missing) return matchesTexts(fallback, words)
+      const m = matchSession(entry, words, content)
+      if (m.hit && m.viaContent[0]) viaContent.set(id, m.viaContent[0])
+      return m.hit
     }
     const allGroups = buildFavoriteGroups(favorites.list(), registry)
     const groups = searching
@@ -404,16 +410,36 @@ export class DashboardPanel {
     const shown = new Set([...favoritedIds, ...liveIds])
     // Searching turns Suggested into Matches: every matching session not
     // already on the page, so a query reaches the sessions no shelf lists.
+    const present = visible.filter((e) => !e.missing)
+    const matchedEntries = searching ? present.filter((e) => matchesSession(e.sessionId, [])) : []
+    const liveById = new Map(live.map((l) => [l.sessionId, l]))
     const suggested = searching
-      ? sessions
-          .browse(this.search, MATCHES_LIMIT + shown.size)
-          .items.filter((c) => !shown.has(c.entityId))
+      ? matchedEntries
+          .filter((e) => !shown.has(e.sessionId))
+          .sort((a, b) =>
+            a.lastActiveAt < b.lastActiveAt ? 1 : a.lastActiveAt > b.lastActiveAt ? -1 : 0
+          )
           .slice(0, MATCHES_LIMIT)
+          .map((e) => sessions.card(e, liveById.get(e.sessionId)))
       : sessions.suggest(SUGGESTED_LIMIT, shown)
     const search: SearchState = {
       query: this.search,
-      matched: searching ? visible.filter((e) => !e.missing && matchesQuery(e, words)).length : 0,
-      total: visible.filter((e) => !e.missing).length,
+      matched: matchedEntries.length,
+      total: present.length,
+    }
+    // Snippets for the cards on the page whose match came from the text.
+    if (viaContent.size) {
+      const onPage = [
+        ...groups.flatMap((g) => g.items.map((i) => i.card)),
+        ...liveCards,
+        ...suggested,
+      ].filter((c): c is FavoriteCard => !!c && viaContent.has(c.entityId))
+      await Promise.all(
+        onPage.map(async (card) => {
+          const snippet = await content.snippet(card.entityId, viaContent.get(card.entityId)!)
+          if (snippet) card.match = { where: 'content', snippet }
+        })
+      )
     }
 
     const indexValue = status.scanning
@@ -450,7 +476,7 @@ export class DashboardPanel {
         label: 'Index',
         value: indexValue,
         hint: indexHint,
-        tooltip: `${status.total} sessions · ${status.complete} complete · ${status.pending} pending · ${status.fastOnly} head/tail only · ${status.missing} missing${hiddenNote}`,
+        tooltip: `${status.total} sessions · ${status.complete} complete · ${status.pending} pending · ${status.fastOnly} head/tail only · ${status.missing} missing · ${this.services.content.size} with searchable text${hiddenNote}`,
       },
     ]
     return {
@@ -545,7 +571,11 @@ export class DashboardPanel {
         if (entry && !entry.missing) unreviewed++
         continue
       }
-      if (words.length && !(entry && !entry.missing && matchesQuery(entry, words))) continue
+      if (
+        words.length &&
+        !(entry && !entry.missing && matchSession(entry, words, this.services.content).hit)
+      )
+        continue
       for (const item of orderItems(itemsOf(report))) {
         rows.push({
           sessionId: id,

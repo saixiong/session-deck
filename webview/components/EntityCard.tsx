@@ -116,6 +116,13 @@ export function EntityCard(props: EntityCardProps) {
           {card.preview}
         </p>
       ) : null}
+      {card.match ? (
+        // Shown regardless of Verbose: it is the reason this card is on the page.
+        <p class="card__match" title="This word was found in the transcript, not the title">
+          <span class="codicon codicon-search" aria-hidden="true" />{' '}
+          <span class="card__match-label">matched in transcript</span> {card.match.snippet}
+        </p>
+      ) : null}
       {verbose && !quiet && card.details.length ? <DetailChips details={card.details} /> : null}
       <footer class="card__actions">
         <button class="button" type="button" onClick={() => open()}>
