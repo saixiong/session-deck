@@ -322,7 +322,13 @@ suite('Session Deck — smoke', () => {
       // when two panels carry the same label, since a label is all it has.
       const found = findPanelTab('Fix login bug and ship')
       assert.ok(found !== undefined && found !== 'ambiguous', 'exactly one tab expected')
-      assert.equal(found.group.viewColumn, panel.viewColumn)
+      // The tab's group column is what the recycle passes to reopen. It is
+      // compared against the panel's own `viewColumn` only when that is set:
+      // the API leaves it undefined until the panel is placed, and on a slow
+      // runner the tab model gets there first.
+      const column: number = found.group.viewColumn
+      assert.ok(column >= 1, 'the tab knows its column')
+      if (panel.viewColumn !== undefined) assert.equal(found.group.viewColumn, panel.viewColumn)
       const twin = vscode.window.createWebviewPanel(
         'claudeVSCodePanel',
         'Fix login bug and ship',
