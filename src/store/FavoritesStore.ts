@@ -47,6 +47,8 @@ export class FavoritesStore {
   private watcher: FSWatcher | undefined
   private reloadTimer: NodeJS.Timeout | undefined
   private lastWritten = ''
+  /** Bumped by every save; a reload that overlapped one discards what it read. */
+  private writeGeneration = 0
   private loaded = false
 
   constructor(readonly path: string) {}
@@ -226,18 +228,23 @@ export class FavoritesStore {
   private async persist(): Promise<void> {
     const file: FavoritesFile = { version: 1, favorites: this.list() }
     const text = JSON.stringify(file, null, 2) + '\n'
+    this.writeGeneration++
     this.lastWritten = text
     await writeFileAtomic(this.path, text)
     this.emit()
   }
 
   private async reloadIfChanged(): Promise<void> {
+    // Same guard as BoardStore: a read that overlapped a save may hold bytes
+    // older than the write, and adopting them would undo it.
+    const generation = this.writeGeneration
     let raw: string
     try {
       raw = await readFile(this.path, 'utf8')
     } catch {
       raw = ''
     }
+    if (generation !== this.writeGeneration) return
     if (raw === this.lastWritten) return
     this.favorites = parseFavorites(raw)
     this.lastWritten = raw

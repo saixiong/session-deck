@@ -8,7 +8,7 @@ import { bigSession, ordinarySession, rec, ts, writeSession } from '../index/tes
 import { fastTier, newEntry } from '../index/tiers'
 import type { SessionIndexEntry } from '../index/types'
 import type { BatchProgress } from '../shared/review'
-import { cliArgs, parseStdout, type CliResult } from './ClaudeCli'
+import { cliArgs, describeError, parseStdout, type CliResult } from './ClaudeCli'
 import { ReviewRunner } from './ReviewRunner'
 import { fingerprintOf, parseReviewFile, ReviewStore } from './ReviewStore'
 import { emptyReview, makeReview, parseReview, REVIEW_SCHEMA, SYSTEM_PROMPT } from './schema'
@@ -166,6 +166,31 @@ describe('ClaudeCli helpers', () => {
     expect(parseStdout('Warning: no stdin data received\n' + json)?.['subtype']).toBe('success')
     expect(parseStdout('')).toBeUndefined()
     expect(parseStdout('garbage')).toBeUndefined()
+  })
+
+  it('an error subtype reports the errors[] the CLI attaches, not just its name', () => {
+    // error_max_structured_output_retries carries no `result`; the reason for
+    // every rejected attempt is in errors[]. Recorded shape, CLI 2.1.276.
+    expect(
+      describeError(
+        {
+          subtype: 'error_max_structured_output_retries',
+          is_error: true,
+          errors: ['StructuredOutput: /items/0/kind must be equal to one of the allowed values'],
+        },
+        undefined
+      )
+    ).toBe(
+      'error_max_structured_output_retries: StructuredOutput: /items/0/kind must be equal to one of the allowed values'
+    )
+    expect(describeError({ subtype: 'error_max_turns', errors: [{ code: 7 }] }, undefined)).toBe(
+      'error_max_turns: {"code":7}'
+    )
+    // A logged-out CLI still puts its message in `result`.
+    expect(describeError({ subtype: 'success', is_error: true }, 'Not logged in')).toBe(
+      'Not logged in'
+    )
+    expect(describeError({}, undefined)).toBe('error')
   })
 })
 
