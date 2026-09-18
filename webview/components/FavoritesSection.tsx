@@ -15,6 +15,8 @@ interface Props {
   /** Opens the Review modal, scrolled to `focus` when given. */
   onReview?: ((focus: string | null) => void) | undefined
   reviewEnabled: boolean
+  /** A search is active: an empty section means "no match", not "nothing starred". */
+  searching?: boolean
   /** Cached reports by session id, for the per-card review badge. */
   reviews?: ReviewState['reviews'] | undefined
 }
@@ -34,10 +36,11 @@ export function FavoritesSection({
   onReview,
   reviewEnabled,
   reviews,
+  searching = false,
 }: Props) {
   const empty = group.items.length === 0
   const override = prefs.tips[group.entityType]
-  const tipsOpen = override ?? empty
+  const tipsOpen = override ?? (empty && !searching)
   const [dragId, setDragId] = useState<string | null>(null)
   const [overId, setOverId] = useState<string | null>(null)
 
@@ -158,6 +161,9 @@ export function FavoritesSection({
           deck={deckFor(group.entityType, group.label)}
           cta={{ label: 'Add items', onClick: onAdd }}
         />
+      ) : null}
+      {empty && searching ? (
+        <p class="muted section__empty">No starred {group.label.toLowerCase()} match.</p>
       ) : null}
       {!empty ? (
         <div class={`favorites favorites--${prefs.view}`}>

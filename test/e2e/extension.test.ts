@@ -143,6 +143,70 @@ suite('Session Deck — smoke', () => {
     assert.equal(item.command?.command, 'sessionDeck.openSession')
   })
 
+  test('the tree filter narrows every section, opens the groups, and clears (SPEC_SEARCH S5)', async () => {
+    const commands = await vscode.commands.getCommands(true)
+    assert.ok(commands.includes('sessionDeck.searchTree'))
+    assert.ok(commands.includes('sessionDeck.clearTreeFilter'))
+
+    // "login" is the first prompt of a session in each project; the branch
+    // `feat/x` belongs to one session in `other` alone. Two words, two shapes.
+    api.tree.setFilter('login')
+    try {
+      const roots = await api.tree.getChildren()
+      assert.deepEqual(
+        roots.map((n) => (n.kind === 'section' ? `${n.id}:${n.count}` : n.kind)),
+        ['filter', 'favorites:0', 'live:0', 'recent:2'],
+        'a Clear row on top, and every count is a count of matches'
+      )
+      const filterItem = api.tree.getTreeItem(roots[0]!)
+      assert.equal(filterItem.command?.command, 'sessionDeck.clearTreeFilter')
+      const both = await api.tree.getChildren(roots[3])
+      assert.deepEqual(both.map((n) => (n.kind === 'project' ? n.label : n.kind)).sort(), [
+        'demo',
+        'other',
+      ])
+
+      api.tree.setFilter('feat/x')
+      const projects = await api.tree.getChildren((await api.tree.getChildren())[3])
+      assert.deepEqual(
+        projects.map((n) => (n.kind === 'project' ? n.label : n.kind)),
+        ['other'],
+        'a project with no match is gone'
+      )
+      const project = api.tree.getTreeItem(projects[0]!)
+      assert.equal(project.collapsibleState, vscode.TreeItemCollapsibleState.Expanded)
+      const rows = await api.tree.getChildren(projects[0])
+      assert.equal(rows.length, 1)
+      assert.equal(
+        rows[0]!.kind === 'session' && rows[0]!.entry?.sessionId,
+        '33333333-3333-4333-8333-333333333333'
+      )
+
+      // Another word: the other demo session, by its first prompt.
+      api.tree.setFilter('long task')
+      const again = await api.tree.getChildren(
+        (await api.tree.getChildren((await api.tree.getChildren())[3]))[0]
+      )
+      assert.equal(again[0]!.kind === 'session' && again[0]!.entry?.sessionId, B)
+
+      // Nothing matches: the sections stay (not the welcome view), all zero.
+      api.tree.setFilter('zebra')
+      const none = await api.tree.getChildren()
+      assert.deepEqual(
+        none.map((n) => (n.kind === 'section' ? n.count : n.kind)),
+        ['filter', 0, 0, 0]
+      )
+    } finally {
+      await vscode.commands.executeCommand('sessionDeck.clearTreeFilter')
+    }
+    const roots = await api.tree.getChildren()
+    assert.deepEqual(
+      roots.map((n) => (n.kind === 'section' ? n.id : n.kind)),
+      ['favorites', 'live', 'recent']
+    )
+    assert.equal(api.tree.filterQuery, '')
+  })
+
   test('starring persists to favorites.json, shows in the tree, and is idempotent', async () => {
     await vscode.commands.executeCommand('sessionDeck.favorite', A)
     await vscode.commands.executeCommand('sessionDeck.favorite', A)

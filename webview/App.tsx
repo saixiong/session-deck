@@ -7,6 +7,7 @@ import { FavoritesSection } from './components/FavoritesSection'
 import { BoardView } from './components/BoardView'
 import { PickerModal } from './components/PickerModal'
 import { ReviewModal } from './components/ReviewModal'
+import { SearchBox } from './components/SearchBox'
 import { Shelf } from './components/Shelf'
 import { StatStrip } from './components/StatStrip'
 
@@ -69,6 +70,7 @@ export function App() {
   }
 
   const { prefs } = state
+  const searching = state.search.query.trim().length > 0
   const boardOpen = state.board.rows.filter((r) => r.state === null || r.state === 'seeded').length
   const setPrefs = (patch: Partial<typeof prefs>) => post({ type: 'setPrefs', prefs: patch })
   const favoritedByType = new Map<FavoriteEntityType, Set<string>>()
@@ -102,6 +104,7 @@ export function App() {
               {boardOpen ? <span class="pill">{boardOpen}</span> : null}
             </button>
           </span>
+          <SearchBox search={state.search} />
           <select
             class="control"
             aria-label="Period"
@@ -162,6 +165,7 @@ export function App() {
           board={state.board}
           prefs={prefs}
           onReview={(focus) => setReviewOpen({ focus })}
+          searching={searching}
         />
       ) : null}
 
@@ -179,6 +183,7 @@ export function App() {
               }
               reviewEnabled={group.items.length > 0 || state.review.extraIds.length > 0}
               reviews={group.entityType === 'session' ? state.review.reviews : undefined}
+              searching={searching}
             />
           ))}
 
@@ -194,13 +199,17 @@ export function App() {
           />
           <Shelf
             id="suggested"
-            title="Suggested"
-            subtitle="recently active, not yet starred"
-            icon="sparkle"
+            title={searching ? 'Matches' : 'Suggested'}
+            subtitle={
+              searching
+                ? 'sessions matching your search, not shown above'
+                : 'recently active, not yet starred'
+            }
+            icon={searching ? 'search' : 'sparkle'}
             cards={state.suggested}
             prefs={prefs}
-            emptyText=""
-            hideWhenEmpty
+            emptyText={searching ? 'No other sessions match.' : ''}
+            hideWhenEmpty={!searching}
           />
         </>
       )}

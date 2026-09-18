@@ -93,6 +93,69 @@ kbd {
   gap: 6px;
 }
 
+/* Search (SPEC_SEARCH S4) -------------------------------------------------- */
+.search {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 26px;
+  padding: 0 4px 0 8px;
+  border: 1px solid var(--deck-border);
+  border-radius: var(--deck-radius);
+  background: var(--vscode-input-background, var(--deck-surface));
+  color: var(--vscode-input-foreground, var(--vscode-foreground));
+  min-width: 200px;
+}
+
+.search:focus-within {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+.search--active {
+  border-color: var(--vscode-focusBorder);
+}
+
+.search__icon {
+  font-size: 14px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.search__input {
+  flex: 1 1 auto;
+  min-width: 120px;
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  outline: none;
+  padding: 3px 2px;
+}
+
+.search__input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.search__input::placeholder {
+  color: var(--vscode-input-placeholderForeground, var(--vscode-descriptionForeground));
+}
+
+.search__count {
+  font-size: 0.85em;
+  white-space: nowrap;
+}
+
+.search__clear {
+  min-height: 20px;
+  padding: 0 3px;
+  border: 0;
+  background: transparent;
+}
+
+.section__empty {
+  margin: 4px 0 0;
+}
+
 /* Controls ---------------------------------------------------------------- */
 
 .control,

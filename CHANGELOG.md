@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Search** ([docs/SPEC_SEARCH.md](docs/SPEC_SEARCH.md) S1): a search box in the dashboard header
+  filters favorites, live, the Board and turns Suggested into **Matches** — every other matching
+  session, so search reaches sessions no shelf lists. A magnifier on the sidebar view filters the
+  tree with the same matcher (a **Clear filter** row and icon appear while it is active; groups open
+  and paging is off so every match is visible). Words are ANDed against title, first and last
+  prompt, preview, project, branches, PRs (`#42`) and id prefix. View state only — never persisted.
+  Transcript content is not searched yet (S2).
 - **Do this / Fix this / Take this direction now land in an already-open session's composer.**
   Claude Code refuses to seed a panel that is open ("Session is already open. Your prompt was not
   applied") and has no API to set its input, so Session Deck recycles the tab: close, reopen in the

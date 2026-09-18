@@ -97,6 +97,18 @@
         "category": "Session Deck"
       },
       {
+        "command": "sessionDeck.searchTree",
+        "title": "Filter Sessions",
+        "category": "Session Deck",
+        "icon": "$(search)"
+      },
+      {
+        "command": "sessionDeck.clearTreeFilter",
+        "title": "Clear Session Filter",
+        "category": "Session Deck",
+        "icon": "$(clear-all)"
+      },
+      {
         "command": "sessionDeck.refreshTree",
         "title": "Refresh",
         "category": "Session Deck",
@@ -191,9 +203,23 @@
         {
           "command": "sessionDeck.reviewSession",
           "when": "false"
+        },
+        {
+          "command": "sessionDeck.clearTreeFilter",
+          "when": "sessionDeck.treeFilterActive"
         }
       ],
       "view/title": [
+        {
+          "command": "sessionDeck.searchTree",
+          "when": "view == sessionDeck.sessions",
+          "group": "navigation@0"
+        },
+        {
+          "command": "sessionDeck.clearTreeFilter",
+          "when": "view == sessionDeck.sessions && sessionDeck.treeFilterActive",
+          "group": "navigation@0"
+        },
         {
           "command": "sessionDeck.openDashboard",
           "when": "view == sessionDeck.sessions",

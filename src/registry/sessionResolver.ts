@@ -1,6 +1,7 @@
-import { basename } from 'node:path'
 import type { LiveSession } from '../index/liveSessions'
 import { resolveTitle } from '../index/records'
+import { matchesQuery, normaliseQuery } from '../index/search'
+import { projectLabel } from '../index/project'
 import { formatCount } from '../index/stats'
 import type { SessionIndexEntry } from '../index/types'
 import type { CardDetail, FavoriteCard } from '../shared/cards'
@@ -42,12 +43,12 @@ export class SessionResolver implements FavoriteResolver {
   }
 
   browse(query: string | null, limit: number): { items: FavoriteCard[]; total: number } {
-    const q = (query ?? '').trim().toLowerCase()
+    const words = normaliseQuery(query)
     const live = this.liveById()
     const matches: SessionIndexEntry[] = []
     for (const entry of this.deps.entries()) {
       if (entry.missing || !this.deps.isVisible(entry)) continue
-      if (q && !this.matches(entry, q)) continue
+      if (!matchesQuery(entry, words)) continue
       matches.push(entry)
     }
     matches.sort(byRecency)
@@ -130,16 +131,6 @@ export class SessionResolver implements FavoriteResolver {
       .some((f) => cwd === f || cwd.startsWith(f.endsWith('/') ? f : `${f}/`))
   }
 
-  private matches(entry: SessionIndexEntry, q: string): boolean {
-    return (
-      resolveTitle(entry).toLowerCase().includes(q) ||
-      entry.firstPrompt.toLowerCase().includes(q) ||
-      projectLabel(entry).toLowerCase().includes(q) ||
-      entry.gitBranches.some((b) => b.toLowerCase().includes(q)) ||
-      entry.prLinks.some((p) => `#${p.number}`.includes(q))
-    )
-  }
-
   private liveById(): Map<string, LiveSession> {
     const map = new Map<string, LiveSession>()
     for (const l of this.deps.live()) map.set(l.sessionId, l)
@@ -147,12 +138,7 @@ export class SessionResolver implements FavoriteResolver {
   }
 }
 
-export function projectLabel(entry: Pick<SessionIndexEntry, 'cwd' | 'slug'>): string {
-  if (entry.cwd) return basename(entry.cwd) || entry.cwd
-  // Slug fallback: "-Users-x-projects-demo" → "demo"
-  const parts = entry.slug.split('-').filter(Boolean)
-  return parts[parts.length - 1] ?? entry.slug
-}
+export { projectLabel } from '../index/project'
 
 export function shortModel(model: string): string {
   return model.replace(/^claude-/, '').replace(/-\d{8}$/, '')
