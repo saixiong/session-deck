@@ -156,6 +156,25 @@ kbd {
   margin: 4px 0 0;
 }
 
+.card__match {
+  margin: 4px 0 0;
+  font-size: 0.85em;
+  color: var(--vscode-descriptionForeground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card__match .codicon {
+  font-size: 12px;
+  vertical-align: -1px;
+}
+
+.card__match-label {
+  color: var(--vscode-textLink-foreground);
+  font-weight: 600;
+}
+
 /* Controls ---------------------------------------------------------------- */
 
 .control,

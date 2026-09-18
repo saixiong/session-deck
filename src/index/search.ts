@@ -67,3 +67,32 @@ export function matchesQuery(
       (w.length >= ID_PREFIX_MIN && id.startsWith(w))
   )
 }
+
+/** What a content index must offer the matcher (S6): which words a session's transcript contains. */
+export interface ContentLookup {
+  wordsIn(sessionId: string, words: readonly string[]): string[]
+}
+
+export interface SessionMatch {
+  hit: boolean
+  /** The words that only the transcript satisfied — empty when metadata alone matched. */
+  viaContent: string[]
+}
+
+/**
+ * The S3 rule with the transcript as one more field (S6): a word counts if it
+ * is in any metadata field or anywhere in the session's indexed text. A word
+ * found only in the text is reported, so a result can say where it matched.
+ */
+export function matchSession(
+  entry: Parameters<typeof matchesQuery>[0],
+  words: readonly string[],
+  content?: ContentLookup
+): SessionMatch {
+  if (words.length === 0) return { hit: true, viaContent: [] }
+  const missing = words.filter((w) => !matchesQuery(entry, [w]))
+  if (missing.length === 0) return { hit: true, viaContent: [] }
+  if (!content) return { hit: false, viaContent: [] }
+  const viaContent = content.wordsIn(entry.sessionId, missing)
+  return { hit: viaContent.length === missing.length, viaContent }
+}

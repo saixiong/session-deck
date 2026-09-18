@@ -1,10 +1,11 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/preact'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { FavoriteGroup } from '../../src/shared/cards'
+import type { FavoriteCard, FavoriteGroup } from '../../src/shared/cards'
 import type { BoardState, DashboardPrefs, SearchState } from '../../src/shared/messages'
 import { DEFAULT_PREFS } from '../../src/shared/messages'
 import { posted } from '../test/setup'
 import { BoardView } from './BoardView'
+import { EntityCard } from './EntityCard'
 import { FavoritesSection } from './FavoritesSection'
 import { SearchBox } from './SearchBox'
 
@@ -88,5 +89,28 @@ describe('empty states while searching', () => {
     const board: BoardState = { rows: [], unreviewed: 0, starred: 3 }
     render(<BoardView board={board} prefs={prefs} onReview={() => undefined} searching />)
     expect(screen.getByText(/No board items belong to a matching session/)).toBeTruthy()
+  })
+})
+
+describe('a card matched through its transcript', () => {
+  const card: FavoriteCard = {
+    entityType: 'session',
+    entityId: 's1',
+    title: 'Fix login bug',
+    subtitle: 'proj · main',
+    preview: 'Shipped.',
+    details: [],
+    status: null,
+    statusVariant: null,
+    updatedAt: null,
+    group: { key: '/w/proj', label: 'proj' },
+    meta: {},
+    match: { where: 'content', snippet: '…the Cookie was never cleared on logout…' },
+  }
+
+  it('shows the snippet and says where it came from, even with Verbose off', () => {
+    render(<EntityCard card={card} variant="tile" verbose={false} starred={false} />)
+    expect(screen.getByText('matched in transcript')).toBeTruthy()
+    expect(screen.getByText(/Cookie was never cleared/)).toBeTruthy()
   })
 })

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { matchesQuery, matchesTexts, normaliseQuery } from './search'
+import { matchSession, matchesQuery, matchesTexts, normaliseQuery } from './search'
 
 const base = {
   sessionId: 'abcdef12-0000-4000-8000-000000000000',
@@ -72,5 +72,35 @@ describe('matchesTexts', () => {
     expect(matchesTexts(['Fix login'], ['fix', 'login'])).toBe(true)
     expect(matchesTexts(['Fix login'], ['fix', 'zebra'])).toBe(false)
     expect(matchesTexts([], [])).toBe(true)
+  })
+})
+
+describe('matchSession (S6)', () => {
+  const content = {
+    wordsIn: (id: string, words: readonly string[]) =>
+      id === base.sessionId ? words.filter((w) => ['cookie', 'logout'].includes(w)) : [],
+  }
+
+  it('metadata alone is a hit with nothing via content', () => {
+    expect(matchSession(base, ['login'], content)).toEqual({ hit: true, viaContent: [] })
+  })
+
+  it('a word only the transcript has is a hit that says so', () => {
+    expect(matchSession(base, ['login', 'cookie'], content)).toEqual({
+      hit: true,
+      viaContent: ['cookie'],
+    })
+  })
+
+  it('a word in neither is a miss, and the partial content hits are still reported', () => {
+    expect(matchSession(base, ['cookie', 'zebra'], content)).toEqual({
+      hit: false,
+      viaContent: ['cookie'],
+    })
+  })
+
+  it('without a content index, unmatched words are simply misses', () => {
+    expect(matchSession(base, ['cookie'])).toEqual({ hit: false, viaContent: [] })
+    expect(matchSession(base, [])).toEqual({ hit: true, viaContent: [] })
   })
 })

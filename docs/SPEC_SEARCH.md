@@ -1,6 +1,6 @@
 # SPEC — Search: find a session by what it is about
 
-Status: **Draft**, 2026-09-18. Extends [SPEC.md](SPEC.md) and [SPEC_BOARD.md](SPEC_BOARD.md); every
+Status: **S0–S2 built**, 2026-09-18. Extends [SPEC.md](SPEC.md) and [SPEC_BOARD.md](SPEC_BOARD.md); every
 decision there holds. Sections numbered `S*`.
 
 ---
@@ -59,13 +59,30 @@ their live name.
   the remaining groups render expanded, Recent paging is off (a filter is already a page), the
   view's description reads `filter: <query>`, and a **Clear filter** row sits at the top.
 
-## S6. Content index (S2 — not built)
+## S6. Content index (S2 — built 2026-09-18)
 
-A per-session text file in `<cache>/content/<sessionId>.txt`: user and assistant text only,
-appended from the indexer's full pass at the byte offset it already tracks. Search scans these
-files with the same word rule; a hit adds `where: 'content'` and a 120-character snippet to the
-result, and the dashboard labels such rows *matched in transcript*. Largest files last, same as
-the index. Nothing is built until S1 has been used enough to know whether it is missed.
+**Measured before designing:** on this machine 727 MB of JSONL across 1,102 files holds **25.6 MB**
+of conversational text in 28k messages with a 56k-word vocabulary, and 1,061 of the files are
+`sdk-cli` sessions hidden by default. That is small enough that a substring scan of an in-memory
+lowercase copy answers a query in milliseconds; an inverted index would have been machinery for
+its own sake, so there is none.
+
+`ContentIndex` (`src/index/ContentIndex.ts`) keeps one file per session in `<globalStorage>/content/
+<sessionId>.txt` — user and assistant text only, no tool calls, results, thinking or meta records,
+one message per line — plus `manifest.json` recording the transcript byte offset and size each file
+reflects. It trails the session index: every change the index reports (coalesced, 1 s) brings the
+*visible* sessions' text up to date — append from the recorded offset, rebuild from zero if the
+transcript shrank, skip if unchanged — smallest first so the big one never blocks the rest, yielding
+every 500 lines. Measured: 41 visible sessions (one of them 57 MB) in 0.9 s; a no-op pass in 0 ms.
+Nothing is ever written under `~/.claude` (D5).
+
+Matching adds the transcript as one more field of the S3 rule: `matchSession` tries each word
+against metadata first and only asks the content index for the words metadata missed, so a result
+knows which words *only* the transcript satisfied. Such a session shows **matched in transcript**
+with a 120-character original-case snippet around the first occurrence — on dashboard cards
+(favorites, live, Matches) whether or not Verbose is on, and as a suffix in the sidebar row's
+description. The Matches shelf is built from this matcher too, so a mid-transcript word reaches
+sessions no shelf lists. The terminal skill does not search content.
 
 ## S7. Phases
 
@@ -73,6 +90,6 @@ the index. Nothing is built until S1 has been used enough to know whether it is 
 |---|---|---|
 | **S0** | This spec | Decisions locked (done) |
 | **S1** | `index/search.ts` + dashboard box + tree filter | The same query gives the same sessions on both surfaces; unit tests cover the matcher's fields and the AND rule; e2e covers the tree filter |
-| **S2** | Content index + `where`/snippet in results | A word that appears only mid-transcript is found on both surfaces; the index is incremental and never reads a file twice |
+| **S2** | Content index + `where`/snippet in results | A word that appears only mid-transcript is found on both surfaces; the index is incremental and never reads a file twice — **done 2026-09-18** |
 
 Cadence as always: implement, audit, fix, next; E2E at the end.

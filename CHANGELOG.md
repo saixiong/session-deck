@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Search reaches the transcript** ([docs/SPEC_SEARCH.md](docs/SPEC_SEARCH.md) S2): a content
+  index — user and assistant text only, one plain-text file per session in the extension's own
+  storage, appended incrementally behind the session index — makes a word buried mid-conversation
+  findable on both the dashboard and the sidebar. A session found only that way shows **matched in
+  transcript** with a snippet. Measured on the real corpus before building: 727 MB of JSONL is
+  25.6 MB of text; 41 visible sessions index in under a second; queries answer in milliseconds.
 - **Search** ([docs/SPEC_SEARCH.md](docs/SPEC_SEARCH.md) S1): a search box in the dashboard header
   filters favorites, live, the Board and turns Suggested into **Matches** — every other matching
   session, so search reaches sessions no shelf lists. A magnifier on the sidebar view filters the

@@ -34,6 +34,8 @@ export interface FavoriteCard {
   group: { key: string; label: string }
   /** Type-specific extras the opener needs (cwd, slug, live pid…). */
   meta: Record<string, unknown>
+  /** Set while searching, when a word was found only in the transcript (SPEC_SEARCH S6). */
+  match?: { where: 'content'; snippet: string }
 }
 
 /** A favorite row joined with its card, or marked missing when the entity is gone. */
