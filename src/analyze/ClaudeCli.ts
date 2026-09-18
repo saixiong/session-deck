@@ -118,16 +118,31 @@ export function runClaude(req: CliRequest): Promise<CliResult> {
         resultText,
         costUsd: typeof parsed['total_cost_usd'] === 'number' ? parsed['total_cost_usd'] : null,
         durationMs: typeof parsed['duration_ms'] === 'number' ? parsed['duration_ms'] : null,
-        errorText: isError
-          ? (
-              resultText ?? (typeof parsed['subtype'] === 'string' ? parsed['subtype'] : 'error')
-            ).slice(0, 400)
-          : undefined,
+        errorText: isError ? describeError(parsed, resultText) : undefined,
       })
     })
     child.stdin.on('error', () => undefined)
     child.stdin.end(req.prompt)
   })
+}
+
+/**
+ * The error subtypes (`error_max_structured_output_retries`, `error_max_turns`,
+ * …) carry no `result` text; the reason lives in `errors[]`. Without it the
+ * card can only say that the schema was not satisfied, never which field —
+ * the difference between a bug report and a shrug.
+ */
+export function describeError(
+  parsed: Record<string, unknown>,
+  resultText: string | undefined
+): string {
+  const subtype = typeof parsed['subtype'] === 'string' ? parsed['subtype'] : 'error'
+  const errors = Array.isArray(parsed['errors'])
+    ? parsed['errors'].map((e) => (typeof e === 'string' ? e : JSON.stringify(e))).filter(Boolean)
+    : []
+  const head = resultText?.trim() || subtype
+  const text = errors.length ? `${head}: ${errors.join('; ')}` : head
+  return text.slice(0, 600)
 }
 
 function fail(errorText: string): CliResult {
