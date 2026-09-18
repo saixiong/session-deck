@@ -1,5 +1,6 @@
 import * as vscode from 'vscode'
 import { resolveTitle } from '../../index/records'
+import { matchesQuery, matchesTexts, normaliseQuery } from '../../index/search'
 import type { SessionIndexEntry } from '../../index/types'
 import { projectLabel } from '../../registry/sessionResolver'
 import type { Services } from '../../services'
@@ -34,8 +35,11 @@ export type TreeNode =
       parentKey: string
     }
   | { kind: 'more'; section: 'recent'; key: string; remaining: number }
+  /** The top row while a filter is active: shows the query, click clears it (S5). */
+  | { kind: 'filter'; query: string }
 
 const PAGE = 20
+export const FILTER_CONTEXT = 'sessionDeck.treeFilterActive'
 
 export class SessionTreeProvider implements vscode.TreeDataProvider<TreeNode>, vscode.Disposable {
   private readonly emitter = new vscode.EventEmitter<TreeNode | undefined>()
@@ -43,6 +47,10 @@ export class SessionTreeProvider implements vscode.TreeDataProvider<TreeNode>, v
   private readonly pageLimits = new Map<string, number>()
   private refreshTimer: NodeJS.Timeout | undefined
   private readonly disposables: vscode.Disposable[] = []
+  /** View state, never persisted (S4). */
+  private filter = ''
+  private words: string[] = []
+  private view: vscode.TreeView<TreeNode> | undefined
 
   constructor(private readonly services: Services) {
     this.disposables.push(
@@ -55,6 +63,48 @@ export class SessionTreeProvider implements vscode.TreeDataProvider<TreeNode>, v
 
   refresh(): void {
     this.emitter.fire(undefined)
+  }
+
+  /** The view this provider feeds, so the filter can be shown in its description. */
+  attach(view: vscode.TreeView<TreeNode>): void {
+    this.view = view
+    this.applyFilterToView()
+  }
+
+  get filterQuery(): string {
+    return this.filter
+  }
+
+  /**
+   * Filter every section by the same words the dashboard uses (S1, S5). An
+   * empty or blank query clears. The context key drives the Clear filter
+   * icon in the view title.
+   */
+  setFilter(query: string): void {
+    const words = normaliseQuery(query)
+    this.filter = words.length ? query.trim() : ''
+    this.words = words
+    void vscode.commands.executeCommand('setContext', FILTER_CONTEXT, words.length > 0)
+    this.applyFilterToView()
+    this.refresh()
+  }
+
+  private get filtering(): boolean {
+    return this.words.length > 0
+  }
+
+  private applyFilterToView(): void {
+    if (!this.view) return
+    this.view.description = this.filtering ? `filter: ${this.filter}` : ''
+  }
+
+  /** Does this session match the active filter? Missing ones match on their label, live-only ones on their live name. */
+  private matches(
+    entry: SessionIndexEntry | undefined,
+    fallback: ReadonlyArray<string | null | undefined>
+  ): boolean {
+    if (!this.filtering) return true
+    return entry ? matchesQuery(entry, this.words) : matchesTexts(fallback, this.words)
   }
 
   showMore(key: string): void {
@@ -74,7 +124,7 @@ export class SessionTreeProvider implements vscode.TreeDataProvider<TreeNode>, v
     const live = await this.services.refreshLive()
     const liveIds = new Set(live.map((l) => l.sessionId))
     const liveNames = new Map(live.map((l) => [l.sessionId, l.name]))
-    if (!node) return this.roots(liveIds)
+    if (!node) return this.roots(liveIds, liveNames)
     switch (node.kind) {
       case 'section':
         return this.sectionChildren(node.id, liveIds, liveNames)
@@ -82,27 +132,37 @@ export class SessionTreeProvider implements vscode.TreeDataProvider<TreeNode>, v
         return this.projectChildren(node, liveIds)
       case 'session':
       case 'more':
+      case 'filter':
         return []
     }
   }
 
-  private roots(liveIds: Set<string>): TreeNode[] {
-    const favorites = this.services.favorites.listByType('session')
-    const recent = this.services.sessions.recent()
+  private roots(liveIds: Set<string>, liveNames: Map<string, string>): TreeNode[] {
+    const { favorites, sessions, indexer } = this.services
+    const starred = favorites
+      .listByType('session')
+      .filter((f) => this.matches(present(indexer.get(f.entity_id)), [f.label]))
+    const recent = sessions.recent().filter((e) => this.matches(e, []))
+    // Same fallback as the section's children, so the count is the list's length.
+    const live = [...liveIds].filter((id) =>
+      this.matches(present(indexer.get(id)), [liveNames.get(id), id])
+    )
     // Nothing anywhere: let the view's welcome content explain instead of
-    // three empty sections.
-    if (favorites.length === 0 && recent.length === 0 && liveIds.size === 0) return []
-    return [
+    // three empty sections — unless a filter is what emptied it.
+    if (starred.length === 0 && recent.length === 0 && live.length === 0 && !this.filtering)
+      return []
+    const sections: TreeNode[] = [
       {
         kind: 'section',
         id: 'favorites',
         label: 'Favorites',
         icon: 'star-full',
-        count: favorites.length,
+        count: starred.length,
       },
-      { kind: 'section', id: 'live', label: 'Live now', icon: 'pulse', count: liveIds.size },
+      { kind: 'section', id: 'live', label: 'Live now', icon: 'pulse', count: live.length },
       { kind: 'section', id: 'recent', label: 'Recent', icon: 'history', count: recent.length },
     ]
+    return this.filtering ? [{ kind: 'filter', query: this.filter }, ...sections] : sections
   }
 
   private sectionChildren(
@@ -112,26 +172,33 @@ export class SessionTreeProvider implements vscode.TreeDataProvider<TreeNode>, v
   ): TreeNode[] {
     const { favorites, sessions, indexer } = this.services
     if (id === 'live') {
-      return [...liveIds].map((sessionId): TreeNode => {
-        const node: Extract<TreeNode, { kind: 'session' }> = {
-          kind: 'session',
-          section: 'live',
-          entry: present(indexer.get(sessionId)),
-          favorite: favorites.get('session', sessionId),
-          live: true,
-          parentKey: 'live',
-        }
-        const liveName = liveNames.get(sessionId)
-        if (liveName) node.liveName = liveName
-        return node
-      })
+      return [...liveIds]
+        .filter((sessionId) =>
+          this.matches(present(indexer.get(sessionId)), [liveNames.get(sessionId), sessionId])
+        )
+        .map((sessionId): TreeNode => {
+          const node: Extract<TreeNode, { kind: 'session' }> = {
+            kind: 'session',
+            section: 'live',
+            entry: present(indexer.get(sessionId)),
+            favorite: favorites.get('session', sessionId),
+            live: true,
+            parentKey: 'live',
+          }
+          const liveName = liveNames.get(sessionId)
+          if (liveName) node.liveName = liveName
+          return node
+        })
     }
     const rows = id === 'favorites' ? favorites.listByType('session') : []
     const entries: Array<{ entry: SessionIndexEntry | undefined; favorite: Favorite | undefined }> =
       id === 'favorites'
-        ? rows.map((f) => ({ entry: present(indexer.get(f.entity_id)), favorite: f }))
+        ? rows
+            .map((f) => ({ entry: present(indexer.get(f.entity_id)), favorite: f }))
+            .filter(({ entry, favorite }) => this.matches(entry, [favorite?.label]))
         : sessions
             .recent()
+            .filter((entry) => this.matches(entry, []))
             .map((entry) => ({ entry, favorite: favorites.get('session', entry.sessionId) }))
     // Group by project; the workspace's project(s) first, then by most recent activity.
     const groups = new Map<
@@ -176,6 +243,7 @@ export class SessionTreeProvider implements vscode.TreeDataProvider<TreeNode>, v
         .listByType('session')
         .map((f) => ({ entry: present(indexer.get(f.entity_id)), favorite: f }))
         .filter(({ entry }) => (entry ? entry.cwd || entry.slug : 'missing') === node.key)
+        .filter(({ entry, favorite }) => this.matches(entry, [favorite.label]))
         .map(({ entry, favorite }) => ({
           kind: 'session' as const,
           section: 'favorites' as const,
@@ -185,8 +253,12 @@ export class SessionTreeProvider implements vscode.TreeDataProvider<TreeNode>, v
           parentKey: node.key,
         }))
     }
-    const all = sessions.recent().filter((e) => (e.cwd || e.slug) === node.key)
-    const limit = this.pageLimits.get(node.key) ?? PAGE
+    const all = sessions
+      .recent()
+      .filter((e) => (e.cwd || e.slug) === node.key)
+      .filter((e) => this.matches(e, []))
+    // A filter is already a page: show every match rather than 20 of them.
+    const limit = this.filtering ? all.length : (this.pageLimits.get(node.key) ?? PAGE)
     const page: TreeNode[] = all.slice(0, limit).map((entry) => ({
       kind: 'session' as const,
       section: 'recent' as const,
@@ -202,6 +274,15 @@ export class SessionTreeProvider implements vscode.TreeDataProvider<TreeNode>, v
 
   getTreeItem(node: TreeNode): vscode.TreeItem {
     switch (node.kind) {
+      case 'filter': {
+        const item = new vscode.TreeItem(`Filter: ${node.query}`)
+        item.id = 'filter'
+        item.description = 'click to clear'
+        item.iconPath = new vscode.ThemeIcon('filter-filled')
+        item.contextValue = 'filter'
+        item.command = { command: 'sessionDeck.clearTreeFilter', title: 'Clear filter' }
+        return item
+      }
       case 'section': {
         const item = new vscode.TreeItem(
           node.label,
@@ -216,13 +297,16 @@ export class SessionTreeProvider implements vscode.TreeDataProvider<TreeNode>, v
         return item
       }
       case 'project': {
+        // While filtering every group opens, so the matches are visible
+        // without a click. VS Code remembers collapse state per id, so the
+        // filtered rendering gets its own id rather than fighting that.
         const item = new vscode.TreeItem(
           node.label,
-          node.section === 'favorites'
+          node.section === 'favorites' || this.filtering
             ? vscode.TreeItemCollapsibleState.Expanded
             : vscode.TreeItemCollapsibleState.Collapsed
         )
-        item.id = `${node.section}:project:${node.key}`
+        item.id = `${node.section}:project:${node.key}${this.filtering ? `?filter=${this.filter}` : ''}`
         item.description = String(node.count)
         item.iconPath = new vscode.ThemeIcon('folder')
         item.contextValue = 'project'

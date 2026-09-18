@@ -27,6 +27,13 @@ Session Deck is an independent project and is not affiliated with Anthropic.
   will not act on (**Show ignored** brings it back) — it is the same state the Board calls
   dismissed, kept in `~/.session-deck/board.json`, never a change to the report.
 
+- **Search** — one box in the dashboard header filters everything on the page: favorites, live,
+  the Board, and a **Matches** shelf listing every other session that fits, so a query reaches the
+  hundreds of sessions no shelf shows. The magnifier on the sidebar runs the same matcher over the
+  tree. Words are ANDed against a session's title, prompts, last-reply preview, project, branches
+  and PRs (`#42`) — what the index already knows; a word buried mid-transcript is not found yet
+  (that is [SPEC_SEARCH](docs/SPEC_SEARCH.md) stage 2).
+
 - **Board** — the `Board` switch in the header flattens every outstanding to-do and blocker from
   every starred session into one list, each tagged by what kind of work it is: **mechanical** (one
   obvious way to do it), **decision** (a human choice that changes what gets built), **yours**

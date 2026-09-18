@@ -1,0 +1,69 @@
+import { resolveTitle } from './records'
+import type { SessionIndexEntry } from './types'
+import { projectLabel } from './project'
+
+/**
+ * The one matcher both surfaces use (SPEC_SEARCH S1, S3): the dashboard's
+ * search box and the sidebar's filter must find the same sessions for the
+ * same words, so there is exactly one place that decides what a word can
+ * match. Words are ANDed, case-insensitive, substring anywhere in a field;
+ * nothing fuzzy, nothing ranked — recency, which every list already uses,
+ * orders the results.
+ */
+
+/** Lowercased words; empty for an empty or whitespace query, which matches everything. */
+export function normaliseQuery(query: string | null | undefined): string[] {
+  return (query ?? '').toLowerCase().split(/\s+/).filter(Boolean)
+}
+
+/** Every word occurs in at least one of the texts. */
+export function matchesTexts(
+  texts: ReadonlyArray<string | null | undefined>,
+  words: readonly string[]
+): boolean {
+  if (words.length === 0) return true
+  const haystack = texts.filter((t): t is string => !!t).map((t) => t.toLowerCase())
+  return words.every((w) => haystack.some((t) => t.includes(w)))
+}
+
+const ID_PREFIX_MIN = 4
+
+/**
+ * What an indexed session can be found by: its title, first and last prompt,
+ * the preview of its last reply, its project, branches and PRs (as `#42`),
+ * and its id — by prefix only, and only for four or more characters, so `a`
+ * does not match every session on the machine.
+ */
+export function matchesQuery(
+  entry: Pick<
+    SessionIndexEntry,
+    | 'sessionId'
+    | 'customTitle'
+    | 'aiTitle'
+    | 'firstPrompt'
+    | 'lastPrompt'
+    | 'preview'
+    | 'cwd'
+    | 'slug'
+    | 'gitBranches'
+    | 'prLinks'
+  >,
+  words: readonly string[]
+): boolean {
+  if (words.length === 0) return true
+  const texts = [
+    resolveTitle(entry),
+    entry.firstPrompt,
+    entry.lastPrompt,
+    entry.preview,
+    projectLabel(entry),
+    ...entry.gitBranches,
+    ...entry.prLinks.map((p) => `#${p.number}`),
+  ]
+  const id = entry.sessionId.toLowerCase()
+  return words.every(
+    (w) =>
+      texts.some((t) => !!t && t.toLowerCase().includes(w)) ||
+      (w.length >= ID_PREFIX_MIN && id.startsWith(w))
+  )
+}

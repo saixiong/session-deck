@@ -177,5 +177,21 @@ export function registerCommands(
       await indexer.refresh()
       tree.refresh()
     }),
+
+    // The sidebar's search (SPEC_SEARCH S5): a tree view cannot hold a text
+    // box, so the magnifier opens one. Same words, same matcher as the
+    // dashboard. Empty input clears.
+    vscode.commands.registerCommand('sessionDeck.searchTree', async () => {
+      const query = await vscode.window.showInputBox({
+        title: 'Session Deck: filter sessions',
+        prompt: "Words to match in a session's title, prompts, preview, project, branch or PR",
+        placeHolder: 'e.g. login bug, #42, fix/…',
+        value: tree.filterQuery,
+      })
+      if (query === undefined) return // dismissed: leave the filter as it was
+      tree.setFilter(query)
+    }),
+
+    vscode.commands.registerCommand('sessionDeck.clearTreeFilter', () => tree.setFilter('')),
   ]
 }

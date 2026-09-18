@@ -11,6 +11,8 @@ interface Props {
   prefs: DashboardPrefs
   /** Opens the Review modal, focused on a session. */
   onReview: (focus: string | null) => void
+  /** A search is active: rows are those of matching sessions only. */
+  searching?: boolean
 }
 
 /**
@@ -21,7 +23,7 @@ interface Props {
  * "show closed" and the kind filter are view preferences, not facts. Selection
  * is webview-local — it is a list of clicks, not something to persist (B7).
  */
-export function BoardView({ board, prefs, onReview }: Props) {
+export function BoardView({ board, prefs, onReview, searching = false }: Props) {
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
   const kinds = prefs.boardKinds
   const showClosed = prefs.boardShowClosed
@@ -119,7 +121,11 @@ export function BoardView({ board, prefs, onReview }: Props) {
       ) : null}
 
       {groups.length === 0 ? (
-        <BoardEmpty board={board} onReview={onReview} />
+        searching && board.rows.length === 0 ? (
+          <p class="muted board__empty">No board items belong to a matching session.</p>
+        ) : (
+          <BoardEmpty board={board} onReview={onReview} />
+        )
       ) : (
         groups.map(({ sessionId, rows }) => {
           const head = rows[0]!

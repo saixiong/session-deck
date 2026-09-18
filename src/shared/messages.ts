@@ -116,6 +116,15 @@ export interface DashboardState {
   browsable: FavoriteEntityType[]
   review: ReviewState
   board: BoardState
+  /** The active search (SPEC_SEARCH S4): empty query = nothing filtered. */
+  search: SearchState
+}
+
+export interface SearchState {
+  query: string
+  /** Visible sessions matching the query — the `12 of 892` in the header. */
+  matched: number
+  total: number
 }
 
 export interface CandidatesPayload {
@@ -139,6 +148,8 @@ export type WebviewToHost =
   | { type: 'openExternal'; url: string }
   | { type: 'setPeriod'; period: Period }
   | { type: 'setPrefs'; prefs: Partial<DashboardPrefs> }
+  /** Filter every list by these words (S2: host-side, one debounced round trip). */
+  | { type: 'setSearch'; query: string }
   | { type: 'command'; command: 'reload' | 'reindex' }
   | { type: 'toggleFavorite'; entityType: FavoriteEntityType; entityId: string; label: string }
   | { type: 'removeFavorite'; id: string }
@@ -176,6 +187,7 @@ const WEBVIEW_TYPES: ReadonlySet<string> = new Set([
   'openExternal',
   'setPeriod',
   'setPrefs',
+  'setSearch',
   'command',
   'toggleFavorite',
   'removeFavorite',
@@ -190,6 +202,7 @@ const WEBVIEW_TYPES: ReadonlySet<string> = new Set([
   'boardSeed',
 ])
 const BOARD_STATES: ReadonlySet<string> = new Set(['done', 'dismissed', 'seeded'])
+export const SEARCH_MAX = 200
 const COMMANDS: ReadonlySet<string> = new Set(['reload', 'reindex'])
 const ENTITY_TYPES: ReadonlySet<string> = new Set(['session', 'project', 'pr'])
 const TARGETS: ReadonlySet<string> = new Set(['default', 'window', 'terminal'])
@@ -220,6 +233,8 @@ export function isWebviewToHost(value: unknown): value is WebviewToHost {
       return PERIODS.includes(v['period'] as Period)
     case 'setPrefs':
       return typeof v['prefs'] === 'object' && v['prefs'] !== null
+    case 'setSearch':
+      return str(v['query']) && v['query'].length <= SEARCH_MAX
     case 'command':
       return str(v['command']) && COMMANDS.has(v['command'])
     case 'toggleFavorite':

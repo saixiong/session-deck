@@ -24,6 +24,7 @@ export function activate(context: vscode.ExtensionContext): SessionDeckApi {
     treeDataProvider: tree,
     showCollapseAll: true,
   })
+  tree.attach(treeView)
   // Clicking the activity-bar icon should land you on the deck, not on a tree
   // of session names with the dashboard still one command away. The panel is
   // revealed with `preserveFocus` so the sidebar you just clicked keeps the

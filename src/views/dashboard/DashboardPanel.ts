@@ -3,6 +3,7 @@ import { isVisibleEntry } from '../../index/createIndexer'
 import { computeStats, formatCount, isPeriod } from '../../index/stats'
 import { MAX_REVIEW_IDS } from '../../analyze/ReviewRunner'
 import { resolveTitle } from '../../index/records'
+import { matchesQuery, matchesTexts, normaliseQuery } from '../../index/search'
 import {
   boardKey,
   compareBoardSessions,
@@ -23,6 +24,7 @@ import type {
   HostToWebview,
   Period,
   ReviewState,
+  SearchState,
   StatTileData,
   WebviewToHost,
 } from '../../shared/messages'
@@ -32,6 +34,8 @@ import { renderDashboardHtml } from './html'
 const PERIOD_KEY = 'sessionDeck.dashboard.period'
 const PREFS_KEY = 'sessionDeck.dashboard.prefs'
 const SUGGESTED_LIMIT = 12
+/** With a query, the Suggested shelf lists every match not shown above, up to this many (S4). */
+const MATCHES_LIMIT = 50
 const BROWSE_MAX = 200
 const CLI_PROBE_TTL_MS = 30_000
 
@@ -52,6 +56,8 @@ export class DashboardPanel {
   /** A showReview that arrived before the webview said `ready`; delivered on ready. */
   private pendingShowReview: { focus: string | null } | null = null
   private webviewReady = false
+  /** View state, never persisted (S4): dies with the panel. */
+  private search = ''
   private cliProbe: { at: number; value: ClaudeCliLocation | undefined } = {
     at: 0,
     value: undefined,
@@ -222,6 +228,10 @@ export class DashboardPanel {
         await services.context.globalState.update(PREFS_KEY, { ...this.prefs, ...msg.prefs })
         await this.push()
         return
+      case 'setSearch':
+        this.search = msg.query
+        await this.push()
+        return
       case 'command':
         if (msg.command === 'reindex') await services.indexer.reindex()
         else await services.indexer.refresh()
@@ -342,7 +352,26 @@ export class DashboardPanel {
     const stats = computeStats(visible, live, period)
     const status = indexer.status()
 
-    const groups = buildFavoriteGroups(favorites.list(), registry)
+    // One matcher for every list (S1). A favorite whose transcript is gone
+    // matches on its label; a live session with no transcript yet, on its
+    // live name.
+    const words = normaliseQuery(this.search)
+    const searching = words.length > 0
+    const matchesSession = (id: string, fallback: ReadonlyArray<string | null | undefined>) => {
+      const entry = indexer.get(id)
+      return entry && !entry.missing ? matchesQuery(entry, words) : matchesTexts(fallback, words)
+    }
+    const allGroups = buildFavoriteGroups(favorites.list(), registry)
+    const groups = searching
+      ? allGroups.map((g) => ({
+          ...g,
+          items: g.items.filter((i) =>
+            i.entityType === 'session'
+              ? matchesSession(i.entityId, [i.label, i.card?.title])
+              : matchesTexts([i.label, i.card?.title, i.card?.subtitle], words)
+          ),
+        }))
+      : allGroups
     const favoritedIds = new Set(favorites.listByType('session').map((f) => f.entity_id))
     const review = await this.reviewState(favoritedIds)
     // Live sessions already starred show their ● on the favorite card; the
@@ -350,6 +379,7 @@ export class DashboardPanel {
     const liveCards: FavoriteCard[] = []
     for (const l of live) {
       if (favoritedIds.has(l.sessionId)) continue
+      if (searching && !matchesSession(l.sessionId, [l.name])) continue
       const entry = indexer.get(l.sessionId)
       const folder = l.cwd.split('/').pop() ?? l.cwd
       liveCards.push(
@@ -371,7 +401,20 @@ export class DashboardPanel {
       )
     }
     const liveIds = new Set(live.map((l) => l.sessionId))
-    const suggested = sessions.suggest(SUGGESTED_LIMIT, new Set([...favoritedIds, ...liveIds]))
+    const shown = new Set([...favoritedIds, ...liveIds])
+    // Searching turns Suggested into Matches: every matching session not
+    // already on the page, so a query reaches the sessions no shelf lists.
+    const suggested = searching
+      ? sessions
+          .browse(this.search, MATCHES_LIMIT + shown.size)
+          .items.filter((c) => !shown.has(c.entityId))
+          .slice(0, MATCHES_LIMIT)
+      : sessions.suggest(SUGGESTED_LIMIT, shown)
+    const search: SearchState = {
+      query: this.search,
+      matched: searching ? visible.filter((e) => !e.missing && matchesQuery(e, words)).length : 0,
+      total: visible.filter((e) => !e.missing).length,
+    }
 
     const indexValue = status.scanning
       ? `${status.complete} / ${status.total}`
@@ -429,8 +472,9 @@ export class DashboardPanel {
       suggested,
       workspaceKeys: (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath),
       browsable: registry.all().map((r) => r.entityType),
-      board: this.buildBoard(favoritedIds, review),
+      board: this.buildBoard(favoritedIds, review, searching ? words : []),
       review,
+      search,
     }
   }
 
@@ -477,7 +521,11 @@ export class DashboardPanel {
    * their `state` so the webview can filter — the host does not decide what is
    * hidden, because the "show done" toggle is a webview pref.
    */
-  private buildBoard(favoritedIds: Set<string>, review: ReviewState): DashboardState['board'] {
+  private buildBoard(
+    favoritedIds: Set<string>,
+    review: ReviewState,
+    words: readonly string[]
+  ): DashboardState['board'] {
     const { board, indexer, favorites } = this.services
     const labels = new Map(
       favorites.listByType('session').map((f) => [f.entity_id, f.label] as const)
@@ -497,6 +545,7 @@ export class DashboardPanel {
         if (entry && !entry.missing) unreviewed++
         continue
       }
+      if (words.length && !(entry && !entry.missing && matchesQuery(entry, words))) continue
       for (const item of orderItems(itemsOf(report))) {
         rows.push({
           sessionId: id,
