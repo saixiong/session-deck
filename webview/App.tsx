@@ -9,6 +9,7 @@ import { PickerModal } from './components/PickerModal'
 import { ReviewModal } from './components/ReviewModal'
 import { SearchBox } from './components/SearchBox'
 import { Shelf } from './components/Shelf'
+import { Stack } from './components/Stack'
 import { StatStrip } from './components/StatStrip'
 
 interface Toast {
@@ -161,57 +162,77 @@ export function App() {
       <StatStrip tiles={state.stats} />
 
       {prefs.mode === 'board' ? (
-        <BoardView
-          board={state.board}
-          prefs={prefs}
-          onReview={(focus) => setReviewOpen({ focus })}
-          searching={searching}
-        />
-      ) : null}
-
-      {prefs.mode === 'board'
-        ? null
-        : state.groups.map((group) => (
-            <FavoritesSection
-              key={group.entityType}
-              group={group}
+        <div class="stack">
+          <div class="pane pane--open" style={{ flex: '1 1 0px' }}>
+            <BoardView
+              board={state.board}
               prefs={prefs}
-              workspaceKeys={state.workspaceKeys}
-              onAdd={() => setPicker({ entityType: group.entityType, label: group.label })}
-              onReview={
-                group.entityType === 'session' ? (focus) => setReviewOpen({ focus }) : undefined
-              }
-              reviewEnabled={group.items.length > 0 || state.review.extraIds.length > 0}
-              reviews={group.entityType === 'session' ? state.review.reviews : undefined}
+              onReview={(focus) => setReviewOpen({ focus })}
               searching={searching}
             />
-          ))}
-
-      {prefs.mode === 'board' ? null : (
-        <>
-          <Shelf
-            id="live"
-            title="Live now"
-            icon="pulse"
-            cards={state.live}
-            prefs={prefs}
-            emptyText="No running Claude Code session that isn't already starred."
-          />
-          <Shelf
-            id="suggested"
-            title={searching ? 'Matches' : 'Suggested'}
-            subtitle={
-              searching
-                ? 'sessions matching your search, not shown above'
-                : 'recently active, not yet starred'
-            }
-            icon={searching ? 'search' : 'sparkle'}
-            cards={state.suggested}
-            prefs={prefs}
-            emptyText={searching ? 'No other sessions match.' : ''}
-            hideWhenEmpty={!searching}
-          />
-        </>
+          </div>
+        </div>
+      ) : (
+        <Stack
+          sizes={prefs.sizes}
+          onSizes={(sizes) => setPrefs({ sizes })}
+          panes={[
+            ...state.groups.map((group) => ({
+              id: group.entityType,
+              open: !(prefs.collapsed[group.entityType] ?? false),
+              node: (
+                <FavoritesSection
+                  key={group.entityType}
+                  group={group}
+                  prefs={prefs}
+                  workspaceKeys={state.workspaceKeys}
+                  onAdd={() => setPicker({ entityType: group.entityType, label: group.label })}
+                  onReview={
+                    group.entityType === 'session' ? (focus) => setReviewOpen({ focus }) : undefined
+                  }
+                  reviewEnabled={group.items.length > 0 || state.review.extraIds.length > 0}
+                  reviews={group.entityType === 'session' ? state.review.reviews : undefined}
+                  searching={searching}
+                />
+              ),
+            })),
+            {
+              id: 'live',
+              open: !(prefs.collapsed['live'] ?? true),
+              node: (
+                <Shelf
+                  id="live"
+                  title="Live now"
+                  icon="pulse"
+                  cards={state.live}
+                  prefs={prefs}
+                  emptyText="No running Claude Code session that isn't already starred."
+                />
+              ),
+            },
+            {
+              id: 'suggested',
+              open: !(prefs.collapsed['suggested'] ?? true),
+              hidden: !searching && state.suggested.length === 0,
+              node: (
+                <Shelf
+                  id="suggested"
+                  title={searching ? 'Matches' : 'Suggested'}
+                  subtitle={
+                    searching
+                      ? 'sessions matching your search, not shown above'
+                      : 'recently active, not yet starred'
+                  }
+                  icon={searching ? 'search' : 'sparkle'}
+                  cards={state.suggested}
+                  prefs={prefs}
+                  emptyText={searching ? 'No other sessions match.' : ''}
+                  hideWhenEmpty={!searching}
+                />
+              ),
+            },
+          ]}
+        />
       )}
 
       {picker ? (

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Layout: the dashboard is now the height of its tab, and sections are resizable.** Header and
+  stat strip stay put; Sessions, Live now and Suggested share what is left, each scrolling inside
+  itself instead of the page. Live now and Suggested start **folded**, so Sessions is the whole
+  page until you open one; a **drag handle** between two open sections (arrow keys work too) sets
+  the split, and the split is remembered like collapse state. The Board fills the page the same
+  way. The old 24 rem cap on the list — the inner scrollbar with dead space under it — is gone.
 - **Search reaches the transcript** ([docs/SPEC_SEARCH.md](docs/SPEC_SEARCH.md) S2): a content
   index — user and assistant text only, one plain-text file per session in the extension's own
   storage, appended incrementally behind the session index — makes a word buried mid-conversation

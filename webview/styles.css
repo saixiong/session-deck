@@ -58,13 +58,90 @@ kbd {
 
 /* Layout ------------------------------------------------------------------ */
 
+/* The deck is an app, not a document: the viewport's height, header and
+   stat strip fixed, and the stack of sections below sharing what is left.
+   Each open section scrolls inside itself; the page never does. */
+#root {
+  height: 100%;
+}
+
 .deck {
   display: flex;
   flex-direction: column;
   gap: calc(var(--deck-gap) * 1.5);
-  padding: var(--deck-gap) calc(var(--deck-gap) * 1.5) calc(var(--deck-gap) * 3);
+  padding: var(--deck-gap) calc(var(--deck-gap) * 1.5);
   max-width: 1400px;
   margin: 0 auto;
+  height: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+/* Stack + panes (resizable sections) --------------------------------------- */
+
+.stack {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.stack--dragging {
+  cursor: row-resize;
+  user-select: none;
+}
+
+.pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.pane--collapsed {
+  flex: 0 0 auto;
+}
+
+.pane--open > .section,
+.pane--open > .board {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.pane + .pane {
+  margin-top: calc(var(--deck-gap) * 1.5);
+}
+
+.splitter {
+  flex: 0 0 auto;
+  height: calc(var(--deck-gap) * 1.5);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: row-resize;
+  touch-action: none;
+}
+
+.splitter + .pane {
+  margin-top: 0;
+}
+
+.splitter__grip {
+  width: 48px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--deck-border);
+  transition: background 120ms;
+}
+
+.splitter:hover .splitter__grip,
+.splitter:focus-visible .splitter__grip,
+.stack--dragging .splitter__grip {
+  background: var(--vscode-focusBorder);
+}
+
+.splitter:focus-visible {
+  outline: none;
 }
 
 .deck--loading {
@@ -77,6 +154,7 @@ kbd {
   justify-content: space-between;
   gap: var(--deck-gap);
   flex-wrap: wrap;
+  flex: 0 0 auto;
 }
 
 .deck__title {
@@ -264,6 +342,7 @@ body.vscode-high-contrast-light .badge {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: var(--deck-gap);
+  flex: 0 0 auto;
 }
 
 .stat {
@@ -298,6 +377,9 @@ body.vscode-high-contrast-light .badge {
   border: 1px solid var(--deck-border);
   border-radius: var(--deck-radius);
   background: var(--deck-surface);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .section--quiet {
@@ -305,6 +387,7 @@ body.vscode-high-contrast-light .badge {
 }
 
 .section__header {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -338,6 +421,9 @@ body.vscode-high-contrast-light .badge {
 
 .section__body {
   padding: 12px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 /* Tip deck ---------------------------------------------------------------- */
@@ -449,6 +535,7 @@ body.vscode-high-contrast-light .badge {
 .deck__footer {
   font-size: 0.85em;
   text-align: right;
+  flex: 0 0 auto;
 }
 
 /* Tip strip nav ----------------------------------------------------------------- */
@@ -506,8 +593,6 @@ body.vscode-high-contrast-light .badge {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  max-height: 24rem;
-  overflow-y: auto;
   padding-right: 2px;
 }
 
@@ -1432,6 +1517,8 @@ body.vscode-high-contrast-light .modal {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .board__head {
