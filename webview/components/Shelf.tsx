@@ -40,7 +40,8 @@ export function Shelf({
       count={cards.length}
       icon={icon}
       quiet
-      collapsed={prefs.collapsed[id] ?? false}
+      // Folded until asked for: with both shelves folded, Sessions is the whole page.
+      collapsed={prefs.collapsed[id] ?? true}
       onToggle={(open) =>
         post({ type: 'setPrefs', prefs: { collapsed: { ...prefs.collapsed, [id]: !open } } })
       }

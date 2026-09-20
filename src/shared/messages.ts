@@ -50,6 +50,8 @@ export interface DashboardPrefs {
   tips: Record<string, boolean>
   /** Collapsed sections, by section id. */
   collapsed: Record<string, boolean>
+  /** Relative heights of the dashboard's open panes (sessions / live / suggested); missing = 1. */
+  sizes: Record<string, number>
 }
 
 export const DEFAULT_PREFS: DashboardPrefs = {
@@ -60,6 +62,7 @@ export const DEFAULT_PREFS: DashboardPrefs = {
   boardShowClosed: false,
   tips: {},
   collapsed: {},
+  sizes: {},
 }
 
 export interface ReviewState {
