@@ -13,6 +13,7 @@ import type { BoardItemState } from '../../src/shared/board'
 import { boardKey, itemIdOf } from '../../src/shared/board'
 import { post } from '../vscodeApi'
 import { Modal } from './Modal'
+import { ModelPicker } from './ModelPicker'
 
 interface Props {
   group: FavoriteGroup | undefined
@@ -94,6 +95,7 @@ export function ReviewModal({ group, review, focus, onClose }: Props) {
           ) : null}
         </div>
         <div class="review__actions">
+          <ModelPicker model={review.model} models={review.models} disabled={running} />
           {running ? (
             <button class="button" type="button" onClick={() => post({ type: 'reviewCancel' })}>
               <span class="codicon codicon-stop-circle" aria-hidden="true" /> Cancel
@@ -125,8 +127,8 @@ export function ReviewModal({ group, review, focus, onClose }: Props) {
           )}
         </div>
         <p class="review__note muted">
-          Analysing reads each session's recent transcript and costs one model call per session (
-          {review.model}). Reports are kept until the session moves on.
+          Analysing reads each session's recent transcript and costs one model call per session.
+          Reports are kept until the session moves on.
           {batch && !running && batch.ids.length
             ? ` Last batch: $${batch.cost_usd.toFixed(3)}.`
             : ''}

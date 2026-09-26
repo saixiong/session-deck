@@ -80,7 +80,16 @@ export interface ReviewState {
    */
   itemStates: Record<string, BoardItemState>
   model: string
+  /** What the model picker offers (SPEC: analyse-with model choice). */
+  models: ModelOptionView[]
   cli: { found: boolean; path: string | null; source: string | null }
+}
+
+export interface ModelOptionView {
+  value: string
+  label: string
+  description?: string
+  source: 'default' | 'alias' | 'claude' | 'seen'
 }
 
 /** One row of the Board: a review item joined with its state and its session's facts (B5). */
@@ -153,6 +162,10 @@ export type WebviewToHost =
   | { type: 'setPrefs'; prefs: Partial<DashboardPrefs> }
   /** Filter every list by these words (S2: host-side, one debounced round trip). */
   | { type: 'setSearch'; query: string }
+  /** Choose the model reviews run on; persisted as the `sessionDeck.model` setting. */
+  | { type: 'setModel'; model: string }
+  /** Re-read the model sources (Claude Code's cache and the index). */
+  | { type: 'refreshModels' }
   | { type: 'command'; command: 'reload' | 'reindex' }
   | { type: 'toggleFavorite'; entityType: FavoriteEntityType; entityId: string; label: string }
   | { type: 'removeFavorite'; id: string }
@@ -191,6 +204,8 @@ const WEBVIEW_TYPES: ReadonlySet<string> = new Set([
   'setPeriod',
   'setPrefs',
   'setSearch',
+  'setModel',
+  'refreshModels',
   'command',
   'toggleFavorite',
   'removeFavorite',
@@ -238,6 +253,10 @@ export function isWebviewToHost(value: unknown): value is WebviewToHost {
       return typeof v['prefs'] === 'object' && v['prefs'] !== null
     case 'setSearch':
       return str(v['query']) && v['query'].length <= SEARCH_MAX
+    case 'setModel':
+      return str(v['model']) && v['model'].length > 0 && v['model'].length <= 100
+    case 'refreshModels':
+      return true
     case 'command':
       return str(v['command']) && COMMANDS.has(v['command'])
     case 'toggleFavorite':

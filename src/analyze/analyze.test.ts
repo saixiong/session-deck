@@ -362,6 +362,67 @@ describe('ReviewRunner', () => {
     ).toBe(false)
   })
 
+  it('retries once when the model failed to produce structured output, and caches the retry', async () => {
+    // error_max_structured_output_retries means the CLI already retried the
+    // tool call five times inside one turn; a fresh turn is the recovery, and
+    // it is the one that happens in practice (observed on a real session).
+    let n = 0
+    const { runner, store, calls } = makeRunner({
+      entries: { a: entryFor('a') },
+      call: () => {
+        n++
+        return Promise.resolve(
+          n === 1
+            ? {
+                ok: false,
+                structured: undefined,
+                resultText: undefined,
+                costUsd: 0.1,
+                durationMs: 1,
+                errorText: 'error_max_structured_output_retries: must have required property done',
+                subtype: 'error_max_structured_output_retries',
+              }
+            : {
+                ok: true,
+                structured: GOOD,
+                resultText: JSON.stringify(GOOD),
+                costUsd: 0.2,
+                durationMs: 2,
+                errorText: undefined,
+              }
+        )
+      },
+    })
+    const progress = await runner.analyze(['a'])
+    expect(calls).toHaveLength(2)
+    expect(progress.failed).toBe(0)
+    expect(progress.status['a']).toBe('done')
+    expect(store.get('a')?.summary).toBe(GOOD.summary)
+  })
+
+  it('does not retry a failure that a second call cannot fix', async () => {
+    const calls: string[] = []
+    const { runner } = makeRunner({
+      entries: { a: entryFor('a') },
+      call: (prompt) => {
+        calls.push(prompt)
+        return Promise.resolve({
+          ok: false,
+          structured: undefined,
+          resultText: 'Not logged in · Please run /login',
+          costUsd: null,
+          durationMs: null,
+          errorText: 'Not logged in · Please run /login',
+          subtype: 'success',
+        })
+      },
+    })
+    const progress = await runner.analyze(['a'])
+    expect(calls).toHaveLength(1)
+    expect(progress.failed).toBe(1)
+    expect(progress.errors['a']).toMatch(/Not logged in/)
+  })
+
   it('a failed session is reported inline and never cached; the others complete', async () => {
     const entries = {
       a: entryFor('a'),

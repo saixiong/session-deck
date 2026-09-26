@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+- **Model picker in the Review modal**, next to Analyse. The choice writes the `sessionDeck.model`
+  setting, so the skill CLI and your next window use it too. The list is three sources in one:
+  the aliases (`opus`, `sonnet`, `haiku`, `fable`), each of which always resolves to the newest
+  model of its family; the models **Claude Code itself** has cached for your account
+  (`~/.claude.json`), labels and all; and the model ids seen in your own indexed sessions, most
+  recently used first. **Default** passes no `--model` at all, so reviews follow whatever model
+  Claude Code is set to — note that may be pricier than Sonnet, which stays the shipped default.
+  Refresh re-reads those sources; there is no models endpoint to call without an API key, which
+  this extension deliberately does not have. `sessionDeck.model` no longer restricts you to three
+  aliases — a full model id is accepted.
+
+- Fixed: a review could fail outright with `error_max_structured_output_retries` — the model
+  called the CLI's StructuredOutput tool five times in one turn and no attempt carried the whole
+  report (the observed shape: only `summary` survived, the first field of the schema). It is a bad
+  turn, not a bad request: the same session succeeds on the next call. Session Deck now makes one
+  fresh call when that is the failure, and says so in the output channel; the CLI replaces its
+  `result` with an explanation for this subtype, so there is no partial report to salvage. The
+  prompt also says plainly that the tool call is the answer and must carry every field — the model
+  was being asked for the report twice, as text and as a tool call, which is what let a short one
+  through.
+
 - **Layout: the dashboard is now the height of its tab, and sections are resizable.** Header and
   stat strip stay put; Sessions, Live now and Suggested share what is left, each scrolling inside
   itself instead of the page. Live now and Suggested start **folded**, so Sessions is the whole
