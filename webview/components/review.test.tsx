@@ -84,6 +84,11 @@ const state = (overrides: Partial<ReviewState> = {}): ReviewState => ({
   extraCards: {},
   itemStates: {},
   model: 'sonnet',
+  models: [
+    { value: 'default', label: 'Default', source: 'default' as const },
+    { value: 'sonnet', label: 'Sonnet', source: 'alias' as const },
+    { value: 'haiku', label: 'Haiku', source: 'alias' as const },
+  ],
   cli: { found: true, path: '/x/claude', source: 'path' },
   ...overrides,
 })
@@ -369,6 +374,75 @@ describe('ReviewModal', () => {
     fireEvent.click(screen.getByText('Dismiss'))
     expect(posted[0]).toEqual({ type: 'reviewDismissExtra', sessionId: 'x' })
     expect(screen.getByText(/No claude CLI was found/)).toBeTruthy()
+  })
+
+  it('the model picker sits by Analyse, groups its sources, and writes the choice', () => {
+    render(
+      <ReviewModal
+        group={group([item('a', 'A')])}
+        review={state({
+          reviews: { a: review('a', 4) },
+          model: 'sonnet',
+          models: [
+            {
+              value: 'default',
+              label: 'Default',
+              description: 'Claude Code s model',
+              source: 'default',
+            },
+            { value: 'sonnet', label: 'Sonnet', source: 'alias' },
+            { value: 'haiku', label: 'Haiku', source: 'alias' },
+            { value: 'claude-fable-5-1[1m]', label: 'Fable 1M', source: 'claude' },
+            { value: 'claude-opus-5', label: 'claude-opus-5', source: 'seen' },
+          ],
+        })}
+        focus={null}
+        onClose={() => undefined}
+      />
+    )
+    const select = document.querySelector<HTMLSelectElement>('#review-model')!
+    expect(screen.getByLabelText('Model')).toBe(select)
+    expect(select.value).toBe('sonnet')
+    expect([...select.querySelectorAll('optgroup')].map((g) => g.label)).toEqual([
+      'Latest of each family',
+      'From Claude Code',
+      'Seen in your sessions',
+    ])
+    fireEvent.change(select, { target: { value: 'claude-opus-5' } })
+    expect(posted).toEqual([{ type: 'setModel', model: 'claude-opus-5' }])
+    posted.length = 0
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh model list' }))
+    expect(posted).toEqual([{ type: 'refreshModels' }])
+  })
+
+  it('the picker is disabled while a batch runs, so the model cannot change mid-run', () => {
+    render(
+      <ReviewModal
+        group={group([item('a', 'A')])}
+        review={state({
+          reviews: { a: review('a', 4) },
+          batch: {
+            ids: ['a'],
+            status: { a: 'running' },
+            errors: {},
+            done: 0,
+            failed: 0,
+            running: true,
+            cancelled: false,
+            cost_usd: 0,
+            started_at: '',
+            finished_at: null,
+          },
+        })}
+        focus={null}
+        onClose={() => undefined}
+      />
+    )
+    expect(document.querySelector<HTMLSelectElement>('#review-model')!.disabled).toBe(true)
+    expect(screen.getByRole('button', { name: 'Refresh model list' })).toHaveProperty(
+      'disabled',
+      true
+    )
   })
 
   it('Escape closes', () => {

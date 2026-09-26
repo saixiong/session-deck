@@ -16,6 +16,15 @@ import { buildFavoriteGroups } from '../../registry/favoritesView'
 import { projectLabel } from '../../registry/sessionResolver'
 import type { Services } from '../../services'
 import { resolveClaudeCli, type ClaudeCliLocation } from '../../util/claudeCli'
+import {
+  buildModelOptions,
+  DEFAULT_MODEL,
+  modelsSeen,
+  readClaudeModelOptions,
+  type ModelOption,
+} from '../../analyze/models'
+import { expandHome } from '../../util/paths'
+import { join } from 'node:path'
 import type { FavoriteCard } from '../../shared/cards'
 import type {
   BoardRow,
@@ -62,6 +71,8 @@ export class DashboardPanel {
     at: 0,
     value: undefined,
   }
+  /** Claude Code's cached model list; re-read on demand, not per push. */
+  private claudeModels: ModelOption[] | undefined
 
   /**
    * `preserveFocus` leaves the caret where the user put it — used when the
@@ -232,6 +243,27 @@ export class DashboardPanel {
         this.search = msg.query
         await this.push()
         return
+      case 'setModel':
+        await vscode.workspace
+          .getConfiguration('sessionDeck')
+          .update('model', msg.model, vscode.ConfigurationTarget.Global)
+        await this.push()
+        return
+      case 'refreshModels': {
+        const before = this.claudeModels?.length ?? 0
+        this.claudeModels = await this.readClaudeModels()
+        const found = this.claudeModels.length
+        await this.push()
+        await this.send({
+          type: 'toast',
+          level: 'info',
+          text:
+            found === 0
+              ? 'No extra models cached by Claude Code yet — the aliases always point at the latest.'
+              : `Model list refreshed: ${found} from Claude Code${found === before ? ' (unchanged)' : ''}.`,
+        })
+        return
+      }
       case 'command':
         if (msg.command === 'reindex') await services.indexer.reindex()
         else await services.indexer.refresh()
@@ -613,15 +645,35 @@ export class DashboardPanel {
       this.cliProbe = { at: Date.now(), value: await resolveClaudeCli() }
     }
     const cli = this.cliProbe.value
+    const model = vscode.workspace
+      .getConfiguration('sessionDeck')
+      .get<string>('model', DEFAULT_MODEL)
+    this.claudeModels ??= await this.readClaudeModels()
     return {
       reviews: out,
       batch: runner.current(),
       extraIds: [...this.extraReviewIds],
       extraCards: Object.fromEntries(this.services.sessions.hydrate([...this.extraReviewIds])),
       itemStates,
-      model: vscode.workspace.getConfiguration('sessionDeck').get<string>('model', 'sonnet'),
+      model,
+      models: buildModelOptions(model, this.claudeModels, modelsSeen(indexer.getAll())),
       cli: { found: cli !== undefined, path: cli?.path ?? null, source: cli?.source ?? null },
     }
+  }
+
+  /**
+   * Claude Code keeps its extra model options in `~/.claude.json`, beside the
+   * projects dir the user pointed us at — so a custom CLAUDE_CONFIG_DIR finds
+   * its own file rather than the default one. A missing file is not an error:
+   * the aliases alone are a complete picker.
+   */
+  private async readClaudeModels(): Promise<ModelOption[]> {
+    const projects = expandHome(
+      vscode.workspace
+        .getConfiguration('sessionDeck')
+        .get<string>('claudeProjectsDir', '~/.claude/projects')
+    )
+    return readClaudeModelOptions(join(projects, '..', '..', '.claude.json'))
   }
 
   private send(message: HostToWebview): Thenable<boolean> {

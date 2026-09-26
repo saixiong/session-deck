@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { FOLLOW_CLAUDE } from './models'
 
 /**
  * One headless `claude -p` call with structured output (spec §3.5, §9.3).
@@ -58,8 +59,9 @@ export function cliArgs(req: Pick<CliRequest, 'systemPrompt' | 'schema' | 'model
     JSON.stringify(req.schema),
     '--system-prompt',
     req.systemPrompt,
-    '--model',
-    req.model,
+    // `default` is our word for "let Claude Code choose": the flag is omitted
+    // rather than passed, which resolves to the model it is set to today.
+    ...(req.model && req.model !== FOLLOW_CLAUDE ? ['--model', req.model] : []),
     '--no-session-persistence',
     '--setting-sources',
     '',

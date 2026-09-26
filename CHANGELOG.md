@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- **Model picker in the Review modal**, next to Analyse. The choice writes the `sessionDeck.model`
+  setting, so the skill CLI and your next window use it too. The list is three sources in one:
+  the aliases (`opus`, `sonnet`, `haiku`, `fable`), each of which always resolves to the newest
+  model of its family; the models **Claude Code itself** has cached for your account
+  (`~/.claude.json`), labels and all; and the model ids seen in your own indexed sessions, most
+  recently used first. **Default** passes no `--model` at all, so reviews follow whatever model
+  Claude Code is set to — note that may be pricier than Sonnet, which stays the shipped default.
+  Refresh re-reads those sources; there is no models endpoint to call without an API key, which
+  this extension deliberately does not have. `sessionDeck.model` no longer restricts you to three
+  aliases — a full model id is accepted.
+
 - Fixed: a review could fail outright with `error_max_structured_output_retries` — the model
   called the CLI's StructuredOutput tool five times in one turn and no attempt carried the whole
   report (the observed shape: only `summary` survived, the first field of the schema). It is a bad

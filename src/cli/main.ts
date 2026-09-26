@@ -2,6 +2,7 @@ import { mkdir } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { runClaude } from '../analyze/ClaudeCli'
+import { DEFAULT_MODEL } from '../analyze/models'
 import { BoardStore } from '../store/BoardStore'
 import {
   BOARD_KINDS,
@@ -32,7 +33,7 @@ import { findClaudeCli } from './findClaude'
  * unchanged and vice versa. No vscode imports anywhere below.
  *
  *   session-deck list [--json]
- *   session-deck review [<id>|all] [--run] [--force] [--model <alias>] [--json]
+ *   session-deck review [<id>|all] [--run] [--force] [--model <alias|default|id>] [--json]
  *   session-deck star <id> | unstar <id>
  *   session-deck show <id>            one cached report in full
  *   session-deck board [--kind <k>] [--all] [--json] [--prompt <session-id>]
@@ -186,7 +187,7 @@ async function cmdReview(e: Env, args: string[]): Promise<number> {
   const json = flag(args, '--json')
   const run = flag(args, '--run')
   const force = flag(args, '--force')
-  const model = option(args, '--model') ?? process.env['SESSION_DECK_MODEL'] ?? 'sonnet'
+  const model = option(args, '--model') ?? process.env['SESSION_DECK_MODEL'] ?? DEFAULT_MODEL
   const target = args[0] ?? 'all'
   const [favorites, reviews, indexer] = await Promise.all([
     openFavorites(e),
@@ -479,7 +480,7 @@ export async function main(argv: string[]): Promise<number> {
           'session-deck — favorites and reviews for Claude Code sessions (shares ~/.session-deck with the VS Code extension)',
           '',
           '  session-deck list [--json]',
-          '  session-deck review [<id>|all] [--run] [--force] [--model <alias>] [--json]',
+          '  session-deck review [<id>|all] [--run] [--force] [--model <alias|default|id>] [--json]',
           '  session-deck show <id> [--json]',
           '  session-deck board [--kind mechanical|decision|user_action] [--all] [--json]',
           "  session-deck board --prompt <id>   the seed prompt for that session's open items",

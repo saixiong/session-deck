@@ -97,7 +97,7 @@ opens in the Claude Code panel; one from another repository opens a new window o
 | `sessionDeck.dataDir`          | `~/.session-deck`    | favorites + cached reviews + board state              |
 | `sessionDeck.claudeProjectsDir`| `~/.claude/projects` | read-only source; override for `CLAUDE_CONFIG_DIR`    |
 | `sessionDeck.claudePath`       | auto                 | `claude` CLI for reviews (bundled → PATH → ~/.local)  |
-| `sessionDeck.model`            | `sonnet`             | model alias for reviews                               |
+| `sessionDeck.model`            | `sonnet`             | model for reviews; `default` follows Claude Code's    |
 | `sessionDeck.concurrency`      | `4`                  | parallel reviews                                      |
 | `sessionDeck.transcriptTurns`  | `80`                 | recent turns a review reads                           |
 | `sessionDeck.showSdkSessions`  | `false`              | list `sdk-cli` sessions                               |

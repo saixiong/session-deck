@@ -309,13 +309,15 @@
         },
         "sessionDeck.model": {
           "type": "string",
-          "enum": [
-            "haiku",
-            "sonnet",
-            "opus"
-          ],
           "default": "sonnet",
-          "description": "Model alias passed to `claude -p --model` when reviewing a session."
+          "description": "Model reviews run on. An alias ('opus', 'sonnet', 'haiku', 'fable') always resolves to the newest of that family; 'default' follows whatever model Claude Code itself is set to; a full model id also works. The Review modal's picker writes this.",
+          "examples": [
+            "default",
+            "opus",
+            "sonnet",
+            "haiku",
+            "fable"
+          ]
         },
         "sessionDeck.concurrency": {
           "type": "integer",
