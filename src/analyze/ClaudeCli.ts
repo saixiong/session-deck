@@ -31,8 +31,22 @@ export interface CliResult {
   costUsd: number | null
   durationMs: number | null
   errorText: string | undefined
+  /** The CLI's result `subtype`, so the caller can tell a retryable failure from a fatal one. */
+  subtype?: string
   /** Raw stdout when it was not JSON, for the output channel. */
   raw?: string
+}
+
+/**
+ * Failures worth one more call. `error_max_structured_output_retries` means
+ * the model called StructuredOutput five times and no attempt satisfied the
+ * schema — observed intermittently on a session that succeeds on the next
+ * call, so it is the model having a bad turn rather than a bad request. The
+ * CLI replaces `result` with its own explanation for this subtype, so there
+ * is no partial report to salvage; a fresh call is the only recovery.
+ */
+export function isRetryable(result: Pick<CliResult, 'subtype'>): boolean {
+  return result.subtype === 'error_max_structured_output_retries'
 }
 
 export function cliArgs(req: Pick<CliRequest, 'systemPrompt' | 'schema' | 'model'>): string[] {
@@ -119,6 +133,7 @@ export function runClaude(req: CliRequest): Promise<CliResult> {
         costUsd: typeof parsed['total_cost_usd'] === 'number' ? parsed['total_cost_usd'] : null,
         durationMs: typeof parsed['duration_ms'] === 'number' ? parsed['duration_ms'] : null,
         errorText: isError ? describeError(parsed, resultText) : undefined,
+        ...(typeof parsed['subtype'] === 'string' ? { subtype: parsed['subtype'] } : {}),
       })
     })
     child.stdin.on('error', () => undefined)

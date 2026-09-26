@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Fixed: a review could fail outright with `error_max_structured_output_retries` — the model
+  called the CLI's StructuredOutput tool five times in one turn and no attempt carried the whole
+  report (the observed shape: only `summary` survived, the first field of the schema). It is a bad
+  turn, not a bad request: the same session succeeds on the next call. Session Deck now makes one
+  fresh call when that is the failure, and says so in the output channel; the CLI replaces its
+  `result` with an explanation for this subtype, so there is no partial report to salvage. The
+  prompt also says plainly that the tool call is the answer and must carry every field — the model
+  was being asked for the report twice, as text and as a tool call, which is what let a short one
+  through.
+
 - **Layout: the dashboard is now the height of its tab, and sections are resizable.** Header and
   stat strip stay put; Sessions, Live now and Suggested share what is left, each scrolling inside
   itself instead of the page. Live now and Suggested start **folded**, so Sessions is the whole

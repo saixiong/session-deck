@@ -1,7 +1,7 @@
 import { resolveTitle } from '../index/records'
 import type { SessionIndexEntry } from '../index/types'
 import type { BatchProgress, ChatReview } from '../shared/review'
-import type { CliResult } from './ClaudeCli'
+import { isRetryable, type CliResult } from './ClaudeCli'
 import type { ReviewStore } from './ReviewStore'
 import { fingerprintOf } from './ReviewStore'
 import { emptyReview, makeReview, parseReview, REVIEW_SCHEMA, SYSTEM_PROMPT } from './schema'
@@ -170,19 +170,28 @@ export class ReviewRunner {
     }
     // Race the call against cancellation: the CLI wrapper honours the signal,
     // but the batch must not hang on a callee that does not.
-    const result = await Promise.race([
-      this.deps.callModel({
-        prompt: transcript.text,
-        systemPrompt: SYSTEM_PROMPT,
-        schema: REVIEW_SCHEMA,
-        signal,
-      }),
-      new Promise<CliResult>((_, reject) => {
-        const onAbort = () => reject(new Error('cancelled'))
-        if (signal.aborted) onAbort()
-        else signal.addEventListener('abort', onAbort, { once: true })
-      }),
-    ])
+    const call = (): Promise<CliResult> =>
+      Promise.race([
+        this.deps.callModel({
+          prompt: transcript.text,
+          systemPrompt: SYSTEM_PROMPT,
+          schema: REVIEW_SCHEMA,
+          signal,
+        }),
+        new Promise<CliResult>((_, reject) => {
+          const onAbort = () => reject(new Error('cancelled'))
+          if (signal.aborted) onAbort()
+          else signal.addEventListener('abort', onAbort, { once: true })
+        }),
+      ])
+    let result = await call()
+    // One retry for a model that had a bad turn (see isRetryable). The CLI
+    // already retried the tool call five times inside that run, so this is a
+    // fresh turn, not a sixth attempt at the same one.
+    if (!result.ok && isRetryable(result) && !signal.aborted) {
+      this.deps.log?.(`${id}: ${result.errorText ?? 'structured output failed'} — retrying once`)
+      result = await call()
+    }
     if (!result.ok) throw new Error(result.errorText ?? 'the model call failed')
     const parsed = parseReview(result.structured, result.resultText)
     const review = makeReview(
